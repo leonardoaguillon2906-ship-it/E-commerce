@@ -10,20 +10,27 @@
     <!-- Mercado Pago SDK oficial -->
     <PackageReference Include="mercadopago-sdk" Version="2.11.0" />
 
-    <!-- Newtonsoft.Json versión compatible -->
+    <!-- Newtonsoft.Json -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 
+    <!-- ASP.NET Core + Identity (alineado a .NET 10) -->
+    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="10.0.0" />
+
     <!-- Entity Framework Core -->
-    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="9.0.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="9.0.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.1">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
+
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+
+    <!-- PostgreSQL -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
 
     <!-- Stripe -->
     <PackageReference Include="Stripe.net" Version="50.1.0" />

@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 
-
 var builder = WebApplication.CreateBuilder(args);
 
 // =======================
@@ -21,10 +20,10 @@ builder.Services.AddControllersWithViews()
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
-// ✅ AGREGADO: Controllers API (para Webhooks)
+// Controllers API (Webhooks)
 builder.Services.AddControllers();
 
-// Razor Pages (Identity) — protegidas para que NO use su propio Login/Register
+// Razor Pages (Identity backend)
 builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeAreaFolder("Identity", "/");
@@ -35,8 +34,6 @@ builder.Services.AddRazorPages(options =>
 // =======================
 builder.Services.AddScoped<PasswordService>();
 
-
-
 // =======================
 // SERVICIOS DE EMAIL
 // =======================
@@ -44,22 +41,28 @@ builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<EmailTemplateService>();
 
-
-
 // =======================
 // SERVICIOS DE APLICACIÓN
 // =======================
-
-// Mercado Pago
 builder.Services.AddScoped<MercadoPagoService>();
 
 // =======================
-// BASE DE DATOS
+// BASE DE DATOS (SQLite local / PostgreSQL producción)
 // =======================
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(
-        builder.Configuration.GetConnectionString("DefaultConnection"))
-);
+if (builder.Environment.IsDevelopment())
+{
+    // 🔹 LOCAL
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlite(
+            builder.Configuration.GetConnectionString("DefaultConnection")));
+}
+else
+{
+    // 🔹 PRODUCCIÓN (Render)
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseNpgsql(
+            builder.Configuration.GetConnectionString("PostgresConnection")));
+}
 
 // =======================
 // SESSION
@@ -96,34 +99,27 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
 
-    // 🔁 SIEMPRE LOGIN PÚBLICO
     options.Events.OnRedirectToLogin = context =>
     {
         context.Response.Redirect("/Account/Login");
         return Task.CompletedTask;
     };
 
-    // 🔁 ACCESS DENIED PÚBLICO
     options.Events.OnRedirectToAccessDenied = context =>
     {
         context.Response.Redirect("/Account/AccessDenied");
         return Task.CompletedTask;
     };
 
-    // ✅ REDIRECCIÓN SEGÚN ROL
     options.Events.OnSignedIn = context =>
     {
         var user = context.Principal;
         if (user != null)
         {
             if (user.IsInRole("Admin"))
-            {
                 context.Response.Redirect("/Admin/Products");
-            }
             else if (user.IsInRole("Cliente"))
-            {
                 context.Response.Redirect("/Cliente/Products");
-            }
         }
         return Task.CompletedTask;
     };
@@ -143,7 +139,7 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
-// ✅ REDIRECCIÓN FORZADA DE IDENTITY UI → LOGIN / REGISTER PÚBLICOS
+// 🔁 Redirección Identity UI → Login público
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value?.ToLower();
@@ -164,9 +160,7 @@ app.Use(async (context, next) =>
 });
 
 app.UseRouting();
-
 app.UseSession();
-
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -191,23 +185,18 @@ using (var scope = app.Services.CreateScope())
 // =======================
 // RUTAS
 // =======================
-
-// ✅ AGREGADO: RUTAS API (Webhook Mercado Pago)
 app.MapControllers();
 
-// Áreas (Admin / Cliente)
 app.MapControllerRoute(
     name: "areas",
     pattern: "{area:exists}/{controller=Products}/{action=Index}/{id?}"
 );
 
-// MVC público
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}"
 );
 
-// Razor Pages (Identity backend)
 app.MapRazorPages();
 
 app.Run();
