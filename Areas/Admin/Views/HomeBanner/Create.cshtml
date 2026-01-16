@@ -1,0 +1,20 @@
+@{
+    ViewData["Title"] = "Nuevo Banner";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+}
+
+<h2>Subir Banner</h2>
+
+<form asp-action="Create" method="post" enctype="multipart/form-data">
+    <div class="mb-3">
+        <label class="form-label">Imagen o Video (.jpg, .png, .mp4)</label>
+        <input type="file" name="file" class="form-control" required />
+    </div>
+
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="isActive" checked />
+        <label class="form-check-label">Activo</label>
+    </div>
+
+    <button class="btn btn-primary">Guardar</button>
+</form>

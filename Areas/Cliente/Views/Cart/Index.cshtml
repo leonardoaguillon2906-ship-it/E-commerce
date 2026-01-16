@@ -1,0 +1,108 @@
+@using System.Globalization
+@model List<EcommerceApp.Models.CartItem>
+
+@{
+    ViewData["Title"] = "Carrito de Compras";
+    var currency = new CultureInfo("en-US"); // Forzar formato $X,XXX.XX
+}
+
+<div class="container py-5">
+
+    <h2 class="mb-4 text-center">🛒 Carrito de Compras</h2>
+
+    @if (Model == null || !Model.Any())
+    {
+        <div class="alert alert-info text-center" id="emptyCart">
+            Tu carrito está vacío.
+        </div>
+
+        <div class="text-center mt-3">
+            <a asp-area="Cliente" asp-controller="Products" asp-action="Index" class="btn btn-primary">
+                Volver a la tienda
+            </a>
+        </div>
+    }
+    else
+    {
+        <table class="table table-dark table-striped align-middle">
+            <thead>
+                <tr class="text-center">
+                    <th>Producto</th>
+                    <th>Precio</th>
+                    <th>Cantidad</th>
+                    <th>Subtotal</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <!-- PRODUCTO -->
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <img src="@(string.IsNullOrEmpty(item.ImageUrl) ? "/images/no-image.png" : item.ImageUrl)"
+                                     style="width:60px;height:60px;object-fit:cover;border-radius:6px;" />
+                                <span>@item.Name</span>
+                            </div>
+                        </td>
+
+                        <!-- PRECIO -->
+                        <td class="text-center">@item.Price.ToString("C2", currency)</td>
+
+                        <!-- CANTIDAD -->
+                        <td class="text-center">@item.Quantity</td>
+
+                        <!-- SUBTOTAL -->
+                        <td class="text-center fw-bold text-success">
+                            @( (item.Price * item.Quantity).ToString("C2", currency) )
+                        </td>
+
+                        <!-- ACCIONES -->
+                        <td class="text-center">
+                            <form asp-area="Cliente" asp-controller="Cart" asp-action="Remove" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="productId" value="@item.ProductId" />
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('¿Estás seguro que quieres quitar este producto?');">
+                                    Quitar
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <!-- TOTAL -->
+        <div class="text-end fs-5 fw-bold mt-3">
+            Total:
+            <span class="text-success" id="cartTotal">
+                @( Model.Sum(i => i.Price * i.Quantity).ToString("C2", currency) )
+            </span>
+        </div>
+
+        <!-- BOTONES -->
+        <div class="d-flex justify-content-between mt-4 flex-wrap gap-2">
+            <a asp-area="Cliente" asp-controller="Products" asp-action="Index" class="btn btn-outline-light">
+                Seguir comprando
+            </a>
+
+            <div class="d-flex gap-2">
+                <form asp-area="Cliente" asp-controller="Cart" asp-action="Clear" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-warning"
+                            onclick="return confirm('¿Estás seguro que quieres vaciar todo el carrito?');">
+                        Vaciar carrito
+                    </button>
+                </form>
+
+                <form asp-area="Cliente" asp-controller="Checkout" asp-action="Index" method="get" class="d-inline">
+                    <button type="submit" class="btn btn-success">
+                        Finalizar compra
+                    </button>
+                </form>
+            </div>
+        </div>
+    }
+</div>

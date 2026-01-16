@@ -1,0 +1,18 @@
+@model EcommerceApp.Models.Category
+
+@{
+    ViewData["Title"] = "Eliminar Categoría";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+}
+
+<h2>Eliminar Categoría</h2>
+
+<div class="alert alert-danger">
+    ¿Seguro que deseas eliminar la categoría <strong>@Model.Name</strong>?
+</div>
+
+<form asp-action="DeleteConfirmed" method="post">
+    <input type="hidden" asp-for="Id" />
+    <button type="submit" class="btn btn-danger">Eliminar</button>
+    <a asp-action="Index" class="btn btn-secondary">Cancelar</a>
+</form>

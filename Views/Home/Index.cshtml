@@ -1,0 +1,406 @@
+﻿@using EcommerceApp.Models
+@model IEnumerable<Product>
+
+@{
+    ViewData["Title"] = "Inicio";
+
+    HomeBanner? homeBanner = ViewBag.HomeBanner as HomeBanner;
+    Product? productBanner = ViewBag.Banner as Product;
+
+    string fallbackImage = Url.Content("~/images v/laptop.jpg");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Dulce Encanto</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+
+    <!-- Fuente script -->
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet" />
+
+    <style>
+        :root {
+            --cream: #fff7ed;
+            --vanilla: #fef3c7;
+            --strawberry: #fb7185;
+            --chocolate: #7c2d12;
+            --caramel: #f59e0b;
+        }
+
+       body {
+    min-height: 100vh;
+    margin: 0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #fff7ed;
+    overflow-x: hidden;
+    position: relative;
+    background: linear-gradient(120deg, #2a140e, #3b1f14, #4a2416, #2a140e);
+    background-size: 300% 300%;
+    animation: bodyGradient 28s ease infinite;
+}
+
+/* Pseudo-elemento para imagen de fondo animada */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: url('/') no-repeat center center; /* reemplaza '/' con la ruta de tu imagen */
+    background-size: cover;
+    z-index: -3;
+    pointer-events: none;
+    filter: brightness(0.85) contrast(1.05) saturate(1.15);
+    animation: imageFloat 30s ease-in-out infinite alternate, imageZoom 40s ease-in-out infinite alternate;
+}
+
+/* Partículas decorativas */
+body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(circle at 25% 20%, rgba(251,113,133,0.12), transparent 45%),
+        radial-gradient(circle at 75% 80%, rgba(245,158,11,0.10), transparent 50%),
+        radial-gradient(circle, rgba(255,247,237,0.08) 2px, transparent 3px);
+    background-size: 140px 140px;
+    animation: glowFloat 28s ease-in-out infinite, sugarFloat 90s linear infinite;
+    pointer-events: none;
+    z-index: -2;
+}
+
+/* ================================
+   ANIMACIONES
+================================ */
+
+keyframes bodyGradient {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+keyframes imageFloat {
+    0%   { background-position: 50% 50%; }
+    25%  { background-position: 52% 48%; }
+    50%  { background-position: 50% 52%; }
+    75%  { background-position: 48% 50%; }
+    100% { background-position: 50% 50%; }
+}
+
+keyframes imageZoom {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+keyframes sugarFloat {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-160px); }
+}
+
+keyframes glowFloat {
+    0%   { opacity: 0.6; }
+    50%  { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+keyframes heroFadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ================================
+   CONTENIDO SIEMPRE VISIBLE
+================================ */
+
+body > * {
+    position: relative;
+    z-index: 1;
+}
+        /* ================= HERO ================= */
+
+        .hero-section {
+            position: relative;
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .hero-media {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: brightness(0.85) saturate(1.15);
+        }
+
+        .hero-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                180deg,
+                rgba(124,45,18,0.75),
+                rgba(251,113,133,0.35),
+                rgba(26,18,14,0.95)
+            );
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+            text-align: center;
+        }
+
+        .hero-title {
+            font-size: 4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg,var(--strawberry),var(--caramel));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-subtitle {
+            font-size: 1.3rem;
+            color: #fde68a;
+            margin-bottom: 2rem;
+        }
+
+        .btn-gradient-primary {
+            background: linear-gradient(135deg,var(--strawberry),var(--caramel));
+            color: #fff;
+            border-radius: 999px;
+            padding: 0.75rem 1.8rem;
+            border: none;
+            transition: all .3s ease;
+        }
+
+        .btn-gradient-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 18px 45px rgba(251,113,133,.65);
+        }
+
+        /* ================= TITULO SECCIÓN ================= */
+
+        .section-title {
+            font-family: 'Pacifico', cursive;
+            font-size: 2.6rem;
+            text-align: center;
+            color: #fce7f3;
+            margin-bottom: 3rem;
+        }
+
+        .section-title::after {
+            content: "";
+            display: block;
+            width: 0;
+            height: 4px;
+            margin: 1rem auto 0;
+            background: linear-gradient(90deg,#f9a8d4,#fb7185);
+            border-radius: 999px;
+            animation: underlineGrow 1s ease forwards;
+        }
+
+        keyframes underlineGrow {
+            to { width: 110px; }
+        }
+
+        /* ================= PRODUCTOS ================= */
+
+        .product-card {
+            background: rgba(255,247,237,0.08);
+            border-radius: 22px;
+            overflow: hidden;
+            transition: all .4s ease;
+            box-shadow: 0 12px 30px rgba(124,45,18,.35);
+            position: relative;
+        }
+
+        .product-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 28px 60px rgba(251,113,133,.45);
+        }
+
+        .product-card img {
+            height: 220px;
+            width: 100%;
+            object-fit: cover;
+        }
+
+        .product-card .card-body {
+            text-align: center;
+        }
+
+        .product-card h5 {
+            font-weight: 600;
+            color: var(--vanilla);
+        }
+
+        .product-card p {
+            color: #fde68a;
+            font-weight: 600;
+        }
+
+        /* ================= DESTACADO ================= */
+
+        .featured-card {
+            position: relative;
+            border-radius: 36px;
+            overflow: hidden;
+            background: #2a1a14;
+            min-height: 360px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 40px 90px rgba(124,45,18,.6);
+        }
+
+        .featured-image {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: .9;
+        }
+
+        .featured-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                90deg,
+                rgba(26,18,14,.95),
+                rgba(26,18,14,.7),
+                rgba(26,18,14,.15)
+            );
+        }
+
+        .featured-content {
+            position: relative;
+            z-index: 2;
+            padding: 3rem;
+            max-width: 520px;
+        }
+
+        .featured-badge {
+            background: var(--strawberry);
+            color: #fff;
+            font-size: .75rem;
+            font-weight: 700;
+            padding: .4rem .9rem;
+            border-radius: 999px;
+        }
+
+        footer {
+            background: rgba(0,0,0,.5);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- HERO -->
+<section class="hero-section">
+    @if (homeBanner != null && homeBanner.IsActive)
+    {
+        if (homeBanner.IsVideo)
+        {
+            <video class="hero-media" autoplay muted loop>
+                <source src="@Url.Content(homeBanner.MediaUrl)" type="video/mp4" />
+            </video>
+        }
+        else
+        {
+            <img class="hero-media" src="@Url.Content(homeBanner.MediaUrl)" />
+        }
+    }
+    else if (productBanner != null)
+    {
+        <img class="hero-media" src="@Url.Content(productBanner.ImageUrl)" />
+    }
+    else
+    {
+        <img class="hero-media" src="@fallbackImage" />
+    }
+
+    <div class="hero-overlay"></div>
+
+    <div class="hero-content">
+        <h1 class="hero-title">Dulce Encanto</h1>
+        <p class="hero-subtitle">Postres artesanales hechos con amor</p>
+        <a asp-controller="Account" asp-action="Register" class="btn btn-gradient-primary">
+            Crear Cuenta
+        </a>
+    </div>
+</section>
+
+<!-- PRODUCTOS -->
+<section class="py-5">
+    <div class="container">
+        <h2 class="section-title">Sabores que Enamoran</h2>
+
+        <div class="row g-4">
+            @foreach (var product in Model)
+            {
+                <div class="col-sm-6 col-md-3">
+                    <div class="product-card">
+                        <img src="@Url.Content(product.ImageUrl ?? "~/images/product-placeholder.png")" />
+
+                        <div class="card-body">
+                            <h5>@product.Name</h5>
+                            <p>$@product.Price.ToString("F2")</p>
+
+                            <a asp-controller="Products"
+                               asp-action="Details"
+                               asp-route-id="@product.Id"
+                               class="btn btn-gradient-primary w-100">
+                                Ver detalles
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+<!-- DESTACADO -->
+<section class="featured-session py-5">
+    <div class="container">
+        <div class="featured-card">
+            <img src="~/images/Postre.jfif" class="featured-image" />
+            <div class="featured-overlay"></div>
+
+            <div class="featured-content">
+                <span class="featured-badge">ARTESANAL</span>
+                <h2 class="featured-title">Hecho con pasión</h2>
+                <p class="featured-text">
+                    Sabores únicos preparados diariamente con ingredientes seleccionados.
+                </p>
+                <a asp-controller="Products" asp-action="Index" class="btn btn-gradient-primary">
+                    Ver catálogo
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="text-center py-4">
+    &copy; @DateTime.Now.Year Dulce Encanto
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

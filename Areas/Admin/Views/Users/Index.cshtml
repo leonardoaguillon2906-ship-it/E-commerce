@@ -1,0 +1,27 @@
+@model IEnumerable<ApplicationUser>
+
+<h2>Usuarios</h2>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in Model)
+        {
+            <tr>
+                <td>@user.Email</td>
+                <td>
+                    <a asp-action="EditRoles"
+                       asp-route-id="@user.Id"
+                       class="btn btn-sm btn-primary">
+                        Roles
+                    </a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

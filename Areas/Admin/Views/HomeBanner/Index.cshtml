@@ -1,0 +1,41 @@
+@model IEnumerable<EcommerceApp.Models.HomeBanner>
+
+@{
+    ViewData["Title"] = "Banners";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+}
+
+<h2>Banners Home</h2>
+
+<a asp-action="Create" class="btn btn-success mb-3">+ Nuevo Banner</a>
+
+<table class="table table-dark">
+    <thead>
+        <tr>
+            <th>Preview</th>
+            <th>Tipo</th>
+            <th>Activo</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var b in Model)
+        {
+            <tr>
+                <td>
+                    @if (b.IsVideo)
+                    {
+                        <video width="120" muted autoplay loop>
+                            <source src="@b.MediaUrl" type="video/mp4" />
+                        </video>
+                    }
+                    else
+                    {
+                        <img src="@b.MediaUrl" width="120" />
+                    }
+                </td>
+                <td>@(b.IsVideo ? "Video" : "Imagen")</td>
+                <td>@(b.IsActive ? "Sí" : "No")</td>
+            </tr>
+        }
+    </tbody>
+</table>

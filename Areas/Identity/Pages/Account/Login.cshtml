@@ -1,0 +1,96 @@
+@page
+@model EcommerceApp.Areas.Identity.Pages.Account.LoginModel
+
+@{
+    ViewData["Title"] = "Iniciar sesión";
+}
+
+<div class="container-fluid min-vh-100 d-flex align-items-center justify-content-center">
+
+    <div class="card shadow-lg border-0 rounded-4 login-card">
+
+        <div class="card-body p-4 p-md-5">
+
+            <h3 class="text-center fw-bold mb-2 text-dark">
+                Bienvenido
+            </h3>
+
+            <p class="text-center text-muted mb-4">
+                Inicia sesión en tu cuenta
+            </p>
+
+            <form method="post" novalidate>
+
+                <div asp-validation-summary="All"
+                     class="alert alert-danger py-2 small">
+                </div>
+
+                <!-- EMAIL -->
+                <div class="mb-3">
+                    <label asp-for="Input.Email"
+                           class="form-label fw-semibold small text-muted">
+                        Correo electrónico
+                    </label>
+                    <input asp-for="Input.Email"
+                           class="form-control"
+                           placeholder="name@example.com" />
+                    <span asp-validation-for="Input.Email"
+                          class="text-danger small"></span>
+                </div>
+
+                <!-- PASSWORD -->
+                <div class="mb-3">
+                    <label asp-for="Input.Password"
+                           class="form-label fw-semibold small text-muted">
+                        Contraseña
+                    </label>
+                    <input asp-for="Input.Password"
+                           type="password"
+                           class="form-control"
+                           placeholder="••••••••" />
+                    <span asp-validation-for="Input.Password"
+                          class="text-danger small"></span>
+                </div>
+
+                <!-- REMEMBER -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="form-check">
+                        <input asp-for="Input.RememberMe"
+                               class="form-check-input" />
+                        <label asp-for="Input.RememberMe"
+                               class="form-check-label small">
+                            Recordarme
+                        </label>
+                    </div>
+
+                    <a asp-page="./ForgotPassword"
+                       class="small text-decoration-none">
+                        ¿Olvidaste tu contraseña?
+                    </a>
+                </div>
+
+                <!-- BUTTON -->
+                <button type="submit"
+                        class="btn btn-primary w-100 py-2 fw-semibold rounded-3">
+                    Iniciar sesión
+                </button>
+
+            </form>
+
+            <hr class="my-4" />
+
+            <div class="text-center small">
+                ¿No tienes cuenta?
+                <a asp-page="./Register"
+                   class="fw-semibold text-decoration-none">
+                    Regístrate
+                </a>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

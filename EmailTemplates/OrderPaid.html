@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Confirmación de pago</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: #f4f6f8;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            background: #ffffff;
+            margin: auto;
+            padding: 20px;
+            border-radius: 6px;
+        }
+        h2 { color: #2c3e50; }
+        .total { font-size: 18px; font-weight: bold; }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #7f8c8d;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Gracias por tu compra</h2>
+
+    <p>Hola <strong>{{CustomerName}}</strong>,</p>
+
+    <p>Tu orden <strong>#{{OrderId}}</strong> fue pagada correctamente.</p>
+
+    <ul>
+        {{OrderItems}}
+    </ul>
+
+    <p class="total">Total pagado: ${{Total}}</p>
+
+    <div class="footer">
+        © {{Year}} Ecommerce App
+    </div>
+</div>
+</body>
+</html>

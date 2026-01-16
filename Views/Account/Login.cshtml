@@ -1,0 +1,108 @@
+@model EcommerceApp.Models.LoginViewModel
+
+@{
+    ViewData["Title"] = "Iniciar sesión";
+}
+
+<div class="container-fluid min-vh-100 d-flex align-items-center justify-content-center login-container">
+
+    <div class="card login-card border-0 shadow-lg rounded-4" style="width: 420px;">
+        <div class="card-body p-4 p-md-5 text-light">
+
+            <!-- HEADER -->
+            <div class="text-center mb-4">
+                <h2 class="fw-bold mb-1 login-title">
+                    Bienvenido
+                </h2>
+                <p class="text-muted mb-0">
+                    Inicia sesión en tu cuenta
+                </p>
+            </div>
+
+            <form asp-action="Login" method="post" novalidate>
+
+                <!-- VALIDATION SUMMARY -->
+                <div asp-validation-summary="All"
+                     class="validation-summary alert alert-danger small py-2 rounded-3 d-none">
+                </div>
+
+                <!-- EMAIL -->
+                <div class="form-floating mb-3">
+                    <input asp-for="Email"
+                           class="form-control form-control-lg"
+                           placeholder="correo@ejemplo.com" />
+                    <label asp-for="Email">
+                        Correo electrónico
+                    </label>
+                    <span asp-validation-for="Email"
+                          class="text-danger small"></span>
+                </div>
+
+                <!-- PASSWORD -->
+                <div class="form-floating mb-3">
+                    <input asp-for="Password"
+                           type="password"
+                           class="form-control form-control-lg"
+                           placeholder="Contraseña" />
+                    <label asp-for="Password">
+                        Contraseña
+                    </label>
+                    <span asp-validation-for="Password"
+                          class="text-danger small"></span>
+                </div>
+
+                <!-- OPTIONS -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="form-check">
+                        <input asp-for="RememberMe"
+                               class="form-check-input" />
+                        <label asp-for="RememberMe"
+                               class="form-check-label small">
+                            Recordarme
+                        </label>
+                    </div>
+
+                    <a asp-controller="Account"
+                       asp-action="ForgotPassword"
+                       class="small text-decoration-none link-secondary">
+                        ¿Olvidaste tu contraseña?
+                    </a>
+                </div>
+
+                <!-- SUBMIT -->
+                <button type="submit"
+                        class="btn btn-primary w-100 py-2 fw-semibold rounded-3 btn-login">
+                    Iniciar sesión
+                </button>
+            </form>
+
+            <!-- DIVIDER -->
+            <div class="login-divider my-4"></div>
+
+            <!-- REGISTER -->
+            <div class="text-center small">
+                ¿No tienes cuenta?
+                <a asp-controller="Account"
+                   asp-action="Register"
+                   class="fw-semibold text-decoration-none link-accent">
+                    Regístrate
+                </a>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const summary = document.querySelector(".validation-summary");
+
+            if (summary && summary.textContent.trim() !== "") {
+                summary.classList.remove("d-none");
+            }
+        });
+    </script>
+}

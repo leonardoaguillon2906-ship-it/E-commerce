@@ -1,0 +1,45 @@
+@using Microsoft.AspNetCore.Identity
+@using EcommerceApp.Models
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+
+<ul class="navbar-nav ms-auto">
+@if (SignInManager.IsSignedIn(User))
+{
+    <li class="nav-item">
+        <span class="nav-link text-white">
+            Hola @User.Identity!.Name
+        </span>
+    </li>
+
+    <li class="nav-item">
+        <form asp-area="Identity"
+              asp-page="/Account/Logout"
+              method="post"
+              class="d-inline">
+            <button type="submit"
+                    class="nav-link btn btn-link text-white p-0">
+                Cerrar sesión
+            </button>
+        </form>
+    </li>
+}
+else
+{
+    <li class="nav-item">
+        <a class="nav-link text-white"
+           asp-area="Identity"
+           asp-page="/Account/Login">
+            Iniciar sesión
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link text-white"
+           asp-area="Identity"
+           asp-page="/Account/Register">
+            Registrarse
+        </a>
+    </li>
+}
+</ul>

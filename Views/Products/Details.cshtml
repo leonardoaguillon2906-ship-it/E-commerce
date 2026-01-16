@@ -1,0 +1,64 @@
+@model EcommerceApp.Models.Product
+
+@{
+    ViewData["Title"] = Model.Name;
+}
+
+<div class="container py-5 text-white">
+
+    <div class="row">
+        <div class="col-md-6">
+            <img src="@Url.Content(Model.ImageUrl ?? "~/images/product-placeholder.png")"
+                 class="img-fluid rounded shadow" />
+        </div>
+
+        <div class="col-md-6">
+            <h1 class="fw-bold">@Model.Name</h1>
+
+            <!-- ========================= -->
+            <!-- DESCRIPCIÓN DEL PRODUCTO -->
+            <!-- ========================= -->
+            <h5 class="mt-4 text-info">Descripción del producto</h5>
+
+            <p class="mt-2" style="color: #e0e0e0;">
+                @if (!string.IsNullOrWhiteSpace(Model.Description))
+                {
+                    @Model.Description
+                }
+                else
+                {
+                    <span style="color:#bbbbbb;">No hay descripción disponible para este producto.</span>
+                }
+            </p>
+
+            <h3 class="text-success mt-4">
+                $@Model.Price.ToString("F2")
+            </h3>
+
+            <p class="mt-3" style="color:#f1f1f1;">
+                <strong>Stock disponible:</strong> @Model.Stock
+            </p>
+
+            <!-- ========================= -->
+            <!-- BOTÓN SEGÚN LOGIN -->
+            <!-- ========================= -->
+            @if (User.Identity != null && User.Identity.IsAuthenticated)
+            {
+                <form asp-area="Cliente" asp-controller="Cart" asp-action="Add" method="post">
+                    <input type="hidden" name="productId" value="@Model.Id" />
+
+                    <button class="btn btn-primary btn-lg mt-3">
+                        Agregar al carrito
+                    </button>
+                </form>
+            }
+            else
+            {
+                <a asp-controller="Account" asp-action="Login" class="btn btn-warning btn-lg mt-3">
+                    Inicia sesión para comprar
+                </a>
+            }
+        </div>
+    </div>
+
+</div>

@@ -1,0 +1,36 @@
+@{
+    ViewData["Title"] = "Pedido confirmado";
+}
+
+<div class="container py-5 text-center">
+
+    <div class="mb-4">
+        <i class="bi bi-check-circle-fill text-success"
+           style="font-size: 5rem;"></i>
+    </div>
+
+    <h2 class="fw-bold text-success">
+        ¡Pedido realizado con éxito!
+    </h2>
+
+    <p class="lead mt-3">
+        Gracias por tu compra. Tu pedido fue procesado correctamente y el
+        stock ha sido actualizado.
+    </p>
+
+    <div class="mt-4">
+        <a asp-area="Cliente"
+           asp-controller="Products"
+           asp-action="Index"
+           class="btn btn-primary btn-lg me-2">
+            Seguir comprando
+        </a>
+
+        <a asp-area="Cliente"
+           asp-controller="Home"
+           asp-action="Index"
+           class="btn btn-outline-secondary btn-lg">
+            Ir al inicio
+        </a>
+    </div>
+</div>

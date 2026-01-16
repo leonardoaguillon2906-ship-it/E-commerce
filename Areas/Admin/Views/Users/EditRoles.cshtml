@@ -1,0 +1,27 @@
+@using Microsoft.AspNetCore.Identity
+@model ApplicationUser
+
+<form asp-action="EditRoles" method="post">
+    <input type="hidden" name="userId" value="@Model.Id" />
+
+    <h3>@Model.Email</h3>
+
+    @foreach (var role in (IEnumerable<IdentityRole>)ViewBag.AllRoles)
+    {
+        <div class="form-check">
+            <input class="form-check-input"
+                   type="checkbox"
+                   name="roles"
+                   value="@role.Name"
+                   checked="@(((IList<string>)ViewBag.UserRoles).Contains(role.Name))" />
+
+            <label class="form-check-label">
+                @role.Name
+            </label>
+        </div>
+    }
+
+    <button type="submit" class="btn btn-success mt-3">
+        Guardar cambios
+    </button>
+</form>

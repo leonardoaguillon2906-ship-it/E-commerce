@@ -1,0 +1,24 @@
+@model EcommerceApp.Models.Product
+
+@{
+    ViewData["Title"] = "Eliminar Producto";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+}
+
+<h2>Eliminar Producto</h2>
+
+<div class="alert alert-danger">
+    ¿Estás seguro de eliminar este producto?
+</div>
+
+<ul>
+    <li><strong>Nombre:</strong> @Model.Name</li>
+    <li><strong>Precio:</strong> @Model.Price.ToString("C")</li>
+    <li><strong>Stock:</strong> @Model.Stock</li>
+</ul>
+
+<form asp-area="Admin" asp-controller="Admin" asp-action="Delete" method="post">
+    <input type="hidden" asp-for="Id" />
+    <button type="submit" class="btn btn-danger">Eliminar</button>
+    <a asp-area="Admin" asp-controller="Admin" asp-action="Products" class="btn btn-secondary">Cancelar</a>
+</form>

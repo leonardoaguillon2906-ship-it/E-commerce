@@ -1,0 +1,26 @@
+@model IEnumerable<EcommerceApp.Models.Product>
+
+@{
+    ViewData["Title"] = "Tienda";
+    Layout = "~/Areas/Cliente/Views/Shared/_ClienteLayout.cshtml";
+}
+
+<h2 class="mb-4">Productos disponibles</h2>
+
+<div class="row">
+@foreach (var item in Model)
+{
+    <div class="col-md-3 mb-4">
+        <div class="card h-100">
+            <img src="@(string.IsNullOrEmpty(item.ImageUrl) ? "/images/no-image.png" : item.ImageUrl)"
+                 class="card-img-top"
+                 style="height:200px;object-fit:cover;" />
+
+            <div class="card-body">
+                <h5 class="card-title">@item.Name</h5>
+                <p class="card-text">$@item.Price</p>
+            </div>
+        </div>
+    </div>
+}
+</div>

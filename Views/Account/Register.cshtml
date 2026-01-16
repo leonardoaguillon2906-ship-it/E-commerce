@@ -1,0 +1,109 @@
+@model EcommerceApp.Models.RegisterViewModel
+
+@{
+    ViewData["Title"] = "Registro";
+}
+
+<style>
+    body {
+        background-color: #121212;
+        color: #eee;
+        font-family: 'Segoe UI', sans-serif;
+    }
+
+    .register-card {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        padding: 2rem;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+
+    .form-control {
+        background-color: rgba(255,255,255,0.1);
+        border: none;
+        color: #fff;
+    }
+
+    .form-control:focus {
+        background-color: rgba(255,255,255,0.15);
+        color: #fff;
+        box-shadow: none;
+        border-color: #0d6efd;
+    }
+
+    label {
+        color: #ccc;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #0d6efd, #6610f2);
+        border: none;
+        border-radius: 10px;
+    }
+
+    .btn-primary:hover {
+        opacity: 0.9;
+    }
+
+    a {
+        color: #0d6efd;
+        text-decoration: none;
+    }
+
+    a:hover {
+        text-decoration: underline;
+    }
+</style>
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+
+            <div class="register-card">
+                <h2 class="text-center mb-4 fw-bold">Crear cuenta</h2>
+
+                <form asp-action="Register" method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <!-- EMAIL -->
+                    <div class="mb-3">
+                        <label asp-for="Email" class="form-label"></label>
+                        <input asp-for="Email" class="form-control" />
+                        <span asp-validation-for="Email" class="text-danger"></span>
+                    </div>
+
+                    <!-- PASSWORD -->
+                    <div class="mb-3">
+                        <label asp-for="Password" class="form-label"></label>
+                        <input asp-for="Password" type="password" class="form-control" />
+                        <span asp-validation-for="Password" class="text-danger"></span>
+                    </div>
+
+                    <!-- CONFIRM PASSWORD -->
+                    <div class="mb-4">
+                        <label asp-for="ConfirmPassword" class="form-label"></label>
+                        <input asp-for="ConfirmPassword" type="password" class="form-control" />
+                        <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
+                    </div>
+
+                    <!-- BOTÓN -->
+                    <button type="submit" class="btn btn-primary w-100">
+                        Registrarse
+                    </button>
+                </form>
+
+                <div class="text-center mt-4">
+                    <p class="text-muted">
+                        ¿Ya tienes cuenta?
+                        <a asp-controller="Account" asp-action="Login">Inicia sesión</a>
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

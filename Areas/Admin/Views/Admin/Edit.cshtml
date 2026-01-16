@@ -1,0 +1,75 @@
+@model EcommerceApp.Models.Product
+
+@{
+    ViewData["Title"] = "Editar Producto";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+}
+
+<h2 class="mb-4">Editar Producto</h2>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <form asp-area="Admin"
+              asp-controller="Products"
+              asp-action="Edit"
+              method="post"
+              enctype="multipart/form-data">
+
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="Id" />
+
+            <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="Name"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Price"></label>
+                <input asp-for="Price" class="form-control" />
+                <span asp-validation-for="Price" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Stock"></label>
+                <input asp-for="Stock" class="form-control" />
+                <span asp-validation-for="Stock" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Description"></label>
+                <textarea asp-for="Description" class="form-control"></textarea>
+                <span asp-validation-for="Description" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="CategoryId"></label>
+                <select asp-for="CategoryId"
+                        asp-items="ViewBag.Categories"
+                        class="form-select">
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label>Imagen actual</label><br />
+                <img src="@Model.ImageUrl"
+                     style="width:120px;height:120px;object-fit:cover;border-radius:6px;" />
+            </div>
+
+            <div class="mb-3">
+                <label>Nueva imagen</label>
+                <input type="file" name="imageFile" class="form-control" />
+            </div>
+
+            <button type="submit" class="btn btn-success">
+                Guardar cambios
+            </button>
+
+            <a asp-action="Index" class="btn btn-secondary">
+                Cancelar
+            </a>
+        </form>
+    </div>
+</div>

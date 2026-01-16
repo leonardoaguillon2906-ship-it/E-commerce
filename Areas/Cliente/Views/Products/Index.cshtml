@@ -1,0 +1,188 @@
+@using EcommerceApp.Models
+@model IEnumerable<Product>
+
+@{
+    ViewData["Title"] = "Catálogo";
+    int? selectedCategory = ViewBag.SelectedCategory as int?;
+    var categories = ViewBag.Categories as List<Category> ?? new List<Category>();
+}
+
+<style>
+    body {
+        background-color: #121212;
+        color: #eee;
+        font-family: 'Segoe UI', sans-serif;
+    }
+
+    .product-card {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        overflow: hidden;
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .product-card:hover {
+        transform: translateY(-7px) scale(1.03);
+        box-shadow: 0 20px 40px rgba(0, 123, 255, 0.5);
+    }
+
+    .btn-outline-primary {
+        border-radius: 10px;
+        transition: all 0.3s;
+    }
+
+    .btn-outline-primary:hover,
+    .btn-outline-primary.active {
+        background: linear-gradient(135deg, #0d6efd, #6610f2);
+        border-color: #0d6efd;
+        color: #fff;
+    }
+
+    .badge-category {
+        background: linear-gradient(135deg, #0d6efd, #6610f2);
+        color: #fff;
+        font-size: 0.8rem;
+    }
+
+    .price {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #0d6efd;
+    }
+
+    .stock-badge {
+        font-size: 0.85rem;
+    }
+
+    .filter-btns .btn {
+        min-width: 100px;
+    }
+
+    /* ✅ COLORES DE TEXTO PARA FONDO OSCURO */
+    .product-title {
+        color: #ffffff;
+    }
+
+    .product-description {
+        color: #cccccc;
+    }
+</style>
+
+<div class="container py-5">
+
+    <!-- TÍTULO -->
+    <div class="text-center mb-5">
+        <h2 class="fw-bold display-6">Catálogo de Tecnología</h2>
+        <p class="text-muted fs-6">
+            Equipos, accesorios y soluciones tecnológicas de última generación
+        </p>
+    </div>
+
+    <!-- FILTRO DE CATEGORÍAS -->
+    <div class="d-flex justify-content-center flex-wrap gap-2 mb-5 filter-btns">
+        <a asp-area="Cliente"
+           asp-controller="Products"
+           asp-action="Index"
+           class="btn btn-outline-primary @(selectedCategory == null ? "active" : "")">
+            Todas
+        </a>
+
+        @foreach (var category in categories)
+        {
+            <a asp-area="Cliente"
+               asp-controller="Products"
+               asp-action="Index"
+               asp-route-categoryId="@category.Id"
+               class="btn btn-outline-primary @(selectedCategory == category.Id ? "active" : "")">
+                @category.Name
+            </a>
+        }
+    </div>
+
+    <!-- PRODUCTOS -->
+    @if (!Model.Any())
+    {
+        <div class="alert alert-secondary text-center">
+            No hay productos disponibles.
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            @foreach (var product in Model.DistinctBy(p => p.Id))
+            {
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 border-0 shadow-sm product-card">
+
+                        <!-- Imagen -->
+                        <div class="bg-light text-center p-3">
+                            <img src="@(string.IsNullOrEmpty(product.ImageUrl) ? "/images/tecnologia.jpg" : product.ImageUrl)"
+                                 class="img-fluid"
+                                 style="height:200px;object-fit:cover;border-radius:10px;" />
+                        </div>
+
+                        <!-- Cuerpo -->
+                        <div class="card-body d-flex flex-column">
+
+                            <!-- ✅ TÍTULO CON COLOR -->
+                            <h5 class="fw-semibold product-title">
+                                @product.Name
+                            </h5>
+
+                            <span class="badge badge-category mb-2">
+                                @product.Category?.Name
+                            </span>
+
+                            <!-- ✅ DESCRIPCIÓN CON COLOR -->
+                            <p class="small mb-3 product-description">
+                                @product.Description
+                            </p>
+
+                            <div class="mt-auto">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <span class="price">$@product.Price.ToString("N2")</span>
+
+                                    @if (product.Stock > 0)
+                                    {
+                                        <span class="badge bg-success stock-badge">
+                                            Stock: @product.Stock
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger stock-badge">
+                                            Sin stock
+                                        </span>
+                                    }
+                                </div>
+
+                                <!-- BOTÓN AGREGAR AL CARRITO -->
+                                @if (product.Stock > 0)
+                                {
+                                    <form asp-area="Cliente"
+                                          asp-controller="Cart"
+                                          asp-action="Add"
+                                          method="post">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="productId" value="@product.Id" />
+                                        <input type="hidden" name="quantity" value="1" />
+
+                                        <button type="submit" class="btn btn-outline-primary w-100 fw-semibold">
+                                            Agregar al carrito
+                                        </button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-outline-secondary w-100 fw-semibold" disabled>
+                                        No disponible
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>

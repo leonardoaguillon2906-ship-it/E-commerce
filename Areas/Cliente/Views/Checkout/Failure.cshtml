@@ -1,0 +1,24 @@
+@{
+    ViewData["Title"] = "Pago Fallido";
+}
+
+<div class="container mt-5 text-center">
+    <div class="card shadow p-5">
+        <h1 class="text-danger display-4">¡Pago no completado!</h1>
+        <p class="lead">Hubo un problema al procesar tu pago.</p>
+
+        @if (ViewBag.PaymentId != null)
+        {
+            <p class="text-muted">ID de Pago: @ViewBag.PaymentId</p>
+        }
+
+        <div class="mt-4">
+            <a asp-area="Cliente" asp-controller="Checkout" asp-action="Confirm" class="btn btn-primary btn-lg">
+                Volver a Confirmar Pedido
+            </a>
+            <a asp-area="Cliente" asp-controller="Cart" asp-action="Index" class="btn btn-outline-secondary btn-lg">
+                Ver Carrito
+            </a>
+        </div>
+    </div>
+</div>

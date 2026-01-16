@@ -1,0 +1,24 @@
+@{
+    ViewData["Title"] = "Pago Pendiente";
+}
+
+<div class="container mt-5 text-center">
+    <div class="card shadow p-5">
+        <h1 class="text-warning display-4">Pago en espera</h1>
+        <p class="lead">Tu pago está pendiente de confirmación.</p>
+
+        @if (ViewBag.PaymentId != null)
+        {
+            <p class="text-muted">ID de Pago: @ViewBag.PaymentId</p>
+        }
+
+        <div class="mt-4">
+            <a asp-area="Cliente" asp-controller="Checkout" asp-action="Confirm" class="btn btn-primary btn-lg">
+                Volver a Confirmar Pedido
+            </a>
+            <a asp-area="Cliente" asp-controller="Orders" asp-action="Index" class="btn btn-outline-secondary btn-lg">
+                Ver mis Pedidos
+            </a>
+        </div>
+    </div>
+</div>

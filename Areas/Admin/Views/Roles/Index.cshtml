@@ -1,0 +1,17 @@
+@using Microsoft.AspNetCore.Identity
+@model IEnumerable<IdentityRole>
+
+<h2>Roles</h2>
+
+<a asp-action="Create" class="btn btn-primary mb-3">
+    Nuevo Rol
+</a>
+
+<table class="table">
+    @foreach (var role in Model)
+    {
+        <tr>
+            <td>@role.Name</td>
+        </tr>
+    }
+</table>

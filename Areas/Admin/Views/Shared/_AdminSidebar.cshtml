@@ -1,0 +1,54 @@
+<aside class="admin-sidebar">
+    <h3 class="logo">ADMIN</h3>
+
+    <ul class="menu">
+
+        <!-- PRODUCTOS -->
+        <li>
+            <a asp-area="Admin"
+               asp-controller="Products"
+               asp-action="Index">
+                Productos
+            </a>
+        </li>
+
+        <!-- CATEGORÍAS -->
+        <li>
+            <a asp-area="Admin"
+               asp-controller="Categories"
+               asp-action="Index">
+                Categorías
+            </a>
+        </li>
+
+        <!-- USUARIOS -->
+        <li>
+            <a asp-area="Admin"
+               asp-controller="Users"
+               asp-action="Index">
+                Usuarios
+            </a>
+        </li>
+
+        <!-- ROLES -->
+        <li>
+            <a asp-area="Admin"
+               asp-controller="Roles"
+               asp-action="Index">
+                Roles
+            </a>
+        </li>
+
+        <li class="divider"></li>
+
+        <!-- VOLVER AL SITIO -->
+        <li>
+            <a asp-area=""
+               asp-controller="Home"
+               asp-action="Index">
+                Ir al sitio
+            </a>
+        </li>
+
+    </ul>
+</aside>

@@ -1,0 +1,114 @@
+@using EcommerceApp.Models
+@model IEnumerable<Product>
+
+@{
+    ViewData["Title"] = "Administrar Productos";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+}
+
+<h2 class="mb-4">Administración de Productos</h2>
+
+<a asp-area="Admin"
+   asp-controller="Products"
+   asp-action="Create"
+   class="btn btn-primary mb-3">
+    + Nuevo Producto
+</a>
+
+<table class="table table-bordered table-hover align-middle">
+    <thead class="table-dark">
+        <tr class="text-center">
+            <th>Imagen</th>
+            <th>Nombre</th>
+            <th>Precio</th>
+            <th>Stock</th>
+            <th>Categoría</th>
+            <th>Banner</th>
+            <th style="width:200px;">Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (Model == null || !Model.Any())
+        {
+            <tr>
+                <td colspan="7" class="text-center text-muted">
+                    No hay productos registrados.
+                </td>
+            </tr>
+        }
+        else
+        {
+            foreach (var item in Model)
+            {
+                <tr>
+                    <!-- Imagen -->
+                    <td class="text-center">
+                        <img src="@(string.IsNullOrEmpty(item.ImageUrl)
+                            ? "/images/no-image.png"
+                            : item.ImageUrl)"
+                             alt="@item.Name"
+                             style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #ddd;" />
+                    </td>
+
+                    <td>@item.Name</td>
+
+                    <td class="text-end">
+                        $@item.Price.ToString("N2")
+                    </td>
+
+                    <td class="text-center">
+                        @if (item.Stock > 0)
+                        {
+                            <span class="badge bg-success">@item.Stock</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger">Sin stock</span>
+                        }
+                    </td>
+
+                    <td>@item.Category?.Name</td>
+
+                    <!-- Banner -->
+                    <td class="text-center">
+                        @if (item.IsHomeBanner)
+                        {
+                            <span class="badge bg-primary">Activo</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">No</span>
+                        }
+                    </td>
+
+                    <!-- Acciones -->
+                    <td class="text-center">
+                        <a asp-area="Admin"
+                           asp-controller="Products"
+                           asp-action="Edit"
+                           asp-route-id="@item.Id"
+                           class="btn btn-sm btn-warning">
+                            Editar
+                        </a>
+
+                        <a asp-area="Admin"
+                           asp-controller="Products"
+                           asp-action="ToggleBanner"
+                           asp-route-id="@item.Id"
+                           class="btn btn-sm btn-info ms-1">
+                            Banner
+                        </a>
+
+                        <a asp-area="Admin"
+                           asp-controller="Products"
+                           asp-action="Delete"
+                           asp-route-id="@item.Id"
+                           class="btn btn-sm btn-danger ms-1">
+                            Eliminar
+                        </a>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>

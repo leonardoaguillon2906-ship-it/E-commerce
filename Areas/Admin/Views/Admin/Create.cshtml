@@ -1,0 +1,88 @@
+@model EcommerceApp.Models.Product
+
+@{
+    ViewData["Title"] = "Nuevo Producto";
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+}
+
+<h2 class="mb-4">Nuevo Producto</h2>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <form asp-area="Admin"
+              asp-controller="Products"
+              asp-action="Create"
+              method="post"
+              enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+
+            <!-- CONTENEDOR DE ERRORES (OCULTO SI NO HAY ERRORES) -->
+            <div asp-validation-summary="All" class="alert alert-danger d-none"></div>
+
+            <!-- Nombre -->
+            <div class="mb-3">
+                <label asp-for="Name" class="form-label"></label>
+                <input asp-for="Name" class="form-control" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <!-- Precio -->
+            <div class="mb-3">
+                <label asp-for="Price" class="form-label"></label>
+                <input asp-for="Price" class="form-control" />
+                <span asp-validation-for="Price" class="text-danger"></span>
+            </div>
+
+            <!-- Stock -->
+            <div class="mb-3">
+                <label asp-for="Stock" class="form-label"></label>
+                <input asp-for="Stock" class="form-control" />
+                <span asp-validation-for="Stock" class="text-danger"></span>
+            </div>
+
+            <!-- Descripción -->
+            <div class="mb-3">
+                <label asp-for="Description" class="form-label"></label>
+                <textarea asp-for="Description" class="form-control"></textarea>
+                <span asp-validation-for="Description" class="text-danger"></span>
+            </div>
+
+            <!-- Categoría -->
+            <div class="mb-3">
+                <label asp-for="CategoryId" class="form-label"></label>
+                <select asp-for="CategoryId" class="form-select"
+                        asp-items="@(ViewBag.Categories as SelectList)">
+                    <option value="">-- Selecciona una categoría --</option>
+                </select>
+                <span asp-validation-for="CategoryId" class="text-danger"></span>
+            </div>
+
+            <!-- Imagen -->
+            <div class="mb-3">
+                <label class="form-label">Imagen del producto</label>
+                <input type="file" name="imageFile" class="form-control" accept="image/*" />
+                <small class="text-muted">Formato permitido: JPG, PNG, GIF. Tamaño máximo: 5MB.</small>
+            </div>
+
+            <!-- Botones -->
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">Guardar Producto</button>
+                <a asp-area="Admin" asp-controller="Products" asp-action="Index" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        // Mostrar el summary solo si hay errores
+        document.addEventListener("DOMContentLoaded", function () {
+            const summary = document.querySelector("[data-valmsg-summary]");
+            if (summary && summary.classList.contains("validation-summary-errors")) {
+                summary.classList.remove("d-none");
+            }
+        });
+    </script>
+}

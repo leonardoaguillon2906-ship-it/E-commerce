@@ -1,0 +1,80 @@
+@using EcommerceApp.Models
+@model IEnumerable<CartItem>
+
+@{
+    ViewData["Title"] = "Confirmar pedido";
+    decimal total = Model.Sum(x => x.Total);
+}
+
+<div class="container py-5">
+    <h2 class="fw-bold mb-4">Confirmar Pedido</h2>
+
+    @if (!Model.Any())
+    {
+        <div class="alert alert-warning text-center">
+            Tu carrito está vacío.
+        </div>
+
+        <a asp-area="Cliente"
+           asp-controller="Products"
+           asp-action="Index"
+           class="btn btn-primary">
+            Volver al catálogo
+        </a>
+    }
+    else
+    {
+        <table class="table table-bordered align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Producto</th>
+                    <th class="text-center">Cantidad</th>
+                    <th class="text-end">Precio</th>
+                    <th class="text-end">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td>@item.Name</td>
+                        <td class="text-center">@item.Quantity</td>
+                        <td class="text-end">$@item.Price.ToString("N2")</td>
+                        <td class="text-end fw-bold">
+                            $@item.Total.ToString("N2")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-end mb-4">
+            <h4>Total:
+                <span class="text-primary fw-bold">
+                    $@total.ToString("N2")
+                </span>
+            </h4>
+        </div>
+
+        <form asp-area="Cliente"
+              asp-controller="Orders"
+              asp-action="Checkout"
+              method="post">
+
+            @Html.AntiForgeryToken()
+
+            <div class="d-flex justify-content-between">
+                <a asp-area="Cliente"
+                   asp-controller="Cart"
+                   asp-action="Index"
+                   class="btn btn-outline-secondary">
+                    Volver al carrito
+                </a>
+
+                <button type="submit" class="btn btn-success btn-lg">
+                    Confirmar y pagar
+                </button>
+            </div>
+        </form>
+    }
+</div>
