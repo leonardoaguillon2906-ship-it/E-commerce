@@ -49,19 +49,19 @@ builder.Services.AddScoped<MercadoPagoService>();
 // =======================
 // BASE DE DATOS (SQLite local / PostgreSQL producción)
 // =======================
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
 if (builder.Environment.IsDevelopment())
 {
-    // 🔹 LOCAL
+    // 🔹 LOCAL (SQLite)
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseSqlite(
-            builder.Configuration.GetConnectionString("DefaultConnection")));
+        options.UseSqlite(connectionString));
 }
 else
 {
-    // 🔹 PRODUCCIÓN (Render)
+    // 🔹 PRODUCCIÓN (Render - PostgreSQL)
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
-        options.UseNpgsql(
-            builder.Configuration.GetConnectionString("PostgresConnection")));
+        options.UseNpgsql(connectionString));
 }
 
 // =======================
@@ -198,5 +198,10 @@ app.MapControllerRoute(
 );
 
 app.MapRazorPages();
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+}
 
 app.Run();
