@@ -17,22 +17,27 @@ namespace EcommerceApp.Data
         public DbSet<CartItem> CartItems { get; set; }
         public DbSet<Order> Orders { get; set; }
         public DbSet<OrderItem> OrderItems { get; set; }
-
         public DbSet<HomeBanner> HomeBanners { get; set; }
-
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
             // =========================
-            // Configuración de Product
+            // Product
             // =========================
             modelBuilder.Entity<Product>(entity =>
             {
-                entity.Property(p => p.Price).HasPrecision(18, 2);
-                entity.Property(p => p.Name).IsRequired().HasMaxLength(100);
-                entity.Property(p => p.Description).IsRequired().HasMaxLength(500);
+                entity.Property(p => p.Price)
+                      .HasColumnType("numeric(18,2)"); // PostgreSQL compatible
+
+                entity.Property(p => p.Name)
+                      .IsRequired()
+                      .HasMaxLength(100);
+
+                entity.Property(p => p.Description)
+                      .IsRequired()
+                      .HasMaxLength(500);
 
                 entity.HasOne(p => p.Category)
                       .WithMany(c => c.Products)
@@ -49,7 +54,7 @@ namespace EcommerceApp.Data
             });
 
             // =========================
-            // Configuración de Category
+            // Category
             // =========================
             modelBuilder.Entity<Category>(entity =>
             {
@@ -63,7 +68,7 @@ namespace EcommerceApp.Data
             });
 
             // =========================
-            // Configuración de CartItem
+            // CartItem
             // =========================
             modelBuilder.Entity<CartItem>(entity =>
             {
@@ -81,7 +86,7 @@ namespace EcommerceApp.Data
             });
 
             // =========================
-            // Configuración de Order
+            // Order
             // =========================
             modelBuilder.Entity<Order>(entity =>
             {
@@ -98,13 +103,14 @@ namespace EcommerceApp.Data
             });
 
             // =========================
-            // Configuración de OrderItem
+            // OrderItem
             // =========================
             modelBuilder.Entity<OrderItem>(entity =>
             {
                 entity.HasKey(oi => oi.Id);
 
-                entity.Property(oi => oi.Price).HasPrecision(18, 2);
+                entity.Property(oi => oi.Price)
+                      .HasColumnType("numeric(18,2)");
 
                 entity.HasOne(oi => oi.Product)
                       .WithMany(p => p.OrderItems)
@@ -118,10 +124,16 @@ namespace EcommerceApp.Data
             });
 
             // =========================
-            // Configuración de ApplicationUser
+            // ApplicationUser (Identity)
             // =========================
             modelBuilder.Entity<ApplicationUser>(entity =>
             {
+                // Ajuste para PostgreSQL boolean type
+                entity.Property(u => u.EmailConfirmed).HasColumnType("boolean");
+                entity.Property(u => u.PhoneNumberConfirmed).HasColumnType("boolean");
+                entity.Property(u => u.TwoFactorEnabled).HasColumnType("boolean");
+                entity.Property(u => u.LockoutEnabled).HasColumnType("boolean");
+
                 entity.HasMany(u => u.CartItems)
                       .WithOne(c => c.User)
                       .HasForeignKey(c => c.UserId);
@@ -129,6 +141,15 @@ namespace EcommerceApp.Data
                 entity.HasMany(u => u.Orders)
                       .WithOne(o => o.User)
                       .HasForeignKey(o => o.UserId);
+            });
+
+            // =========================
+            // HomeBanner
+            // =========================
+            modelBuilder.Entity<HomeBanner>(entity =>
+            {
+                entity.Property(h => h.Title).HasMaxLength(150);
+                entity.Property(h => h.Subtitle).HasMaxLength(300);
             });
         }
     }

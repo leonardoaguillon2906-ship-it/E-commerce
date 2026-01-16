@@ -18,3 +18,4 @@ COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://+:$PORT
 
 ENTRYPOINT ["dotnet", "EcommerceApp.dll"]
+
