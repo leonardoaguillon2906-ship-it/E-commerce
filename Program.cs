@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +17,13 @@ builder.Services.AddControllersWithViews()
     .AddJsonOptions(options => options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles);
 
 builder.Services.AddControllers();
+
+// AUMENTAR LÍMITE DE CARGA (Para soportar imágenes AVIF de alta resolución)
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
+});
+
 builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeAreaFolder("Identity", "/");
@@ -110,13 +118,9 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
-        // IMPORTANTE: La línea de DROP SCHEMA ha sido eliminada para proteger tus datos.
-        // Las tablas ya existen, así que Migrate solo aplicará cambios nuevos en el futuro.
-        
         logger.LogInformation("Verificando actualizaciones de base de datos...");
         await context.Database.MigrateAsync();
 
-        // Los seeders están programados internamente para no duplicar datos si ya existen
         await RoleSeeder.SeedRolesAsync(services);
         await SeedAdminUser.CreateAsync(services);
         

@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using CloudinaryDotNet; 
+using CloudinaryDotNet.Actions; 
 
 namespace EcommerceApp.Areas.Admin.Controllers
 {
@@ -13,6 +15,7 @@ namespace EcommerceApp.Areas.Admin.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _environment;
+        private readonly Cloudinary _cloudinary; 
 
         public ProductsController(
             ApplicationDbContext context,
@@ -20,36 +23,41 @@ namespace EcommerceApp.Areas.Admin.Controllers
         {
             _context = context;
             _environment = environment;
+
+            // ✅ CONFIGURACIÓN SEGURA CON VARIABLES DE ENTORNO
+            var cloudName = Environment.GetEnvironmentVariable("CLOUDINARY_CLOUD_NAME");
+            var apiKey = Environment.GetEnvironmentVariable("CLOUDINARY_API_KEY");
+            var apiSecret = Environment.GetEnvironmentVariable("CLOUDINARY_API_SECRET");
+
+            if (string.IsNullOrEmpty(cloudName))
+            {
+                // Solo para pruebas locales
+                var account = new Account("TU_CLOUD_NAME", "TU_API_KEY", "TU_API_SECRET");
+                _cloudinary = new Cloudinary(account);
+            }
+            else
+            {
+                var account = new Account(cloudName, apiKey, apiSecret);
+                _cloudinary = new Cloudinary(account);
+            }
         }
 
-        // =======================
-        // LISTADO (CON BÚSQUEDA, FILTRO Y PAGINACIÓN)
-        // =======================
         public async Task<IActionResult> Index(string? search, int? categoryId, int page = 1)
         {
             int pageSize = 10;
-
-            // Para filtros en la vista
             ViewBag.Categories = await _context.Categories.ToListAsync();
             ViewBag.Search = search;
             ViewBag.CategoryId = categoryId;
 
-            var query = _context.Products
-                .Include(p => p.Category)
-                .AsQueryable();
+            var query = _context.Products.Include(p => p.Category).AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
-            {
                 query = query.Where(p => p.Name.Contains(search));
-            }
 
             if (categoryId.HasValue)
-            {
                 query = query.Where(p => p.CategoryId == categoryId);
-            }
 
             int totalItems = await query.CountAsync();
-
             var products = await query
                 .OrderByDescending(p => p.Id)
                 .Skip((page - 1) * pageSize)
@@ -62,26 +70,18 @@ namespace EcommerceApp.Areas.Admin.Controllers
             return View("~/Areas/Admin/Views/Admin/Index.cshtml", products);
         }
 
-        // =======================
-        // CREATE GET
-        // =======================
         public IActionResult Create()
         {
             LoadCategories();
             return View("~/Areas/Admin/Views/Admin/Create.cshtml");
         }
 
-        // =======================
-        // CREATE POST
-        // =======================
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(Product product, IFormFile? imageFile)
         {
             if (!await _context.Categories.AnyAsync(c => c.Id == product.CategoryId))
-            {
                 ModelState.AddModelError("CategoryId", "La categoría seleccionada no existe.");
-            }
 
             if (!ModelState.IsValid)
             {
@@ -96,165 +96,126 @@ namespace EcommerceApp.Areas.Admin.Controllers
 
             _context.Products.Add(product);
             await _context.SaveChangesAsync();
-
             return RedirectToAction(nameof(Index));
         }
 
-        // =======================
-        // EDIT GET
-        // =======================
         public async Task<IActionResult> Edit(int id)
         {
             var product = await _context.Products.FindAsync(id);
-            if (product == null)
-                return NotFound();
+            if (product == null) return NotFound();
 
             LoadCategories(product.CategoryId);
             return View("~/Areas/Admin/Views/Admin/Edit.cshtml", product);
         }
 
-        // =======================
-        // EDIT POST
-        // =======================
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(Product product, IFormFile? imageFile)
         {
-            if (!await _context.Categories.AnyAsync(c => c.Id == product.CategoryId))
-            {
-                ModelState.AddModelError("CategoryId", "La categoría seleccionada no existe.");
-            }
-
             if (!ModelState.IsValid)
             {
                 LoadCategories(product.CategoryId);
                 return View("~/Areas/Admin/Views/Admin/Edit.cshtml", product);
             }
 
-            var existingProduct = await _context.Products.FindAsync(product.Id);
-            if (existingProduct == null)
-                return NotFound();
-
-            existingProduct.Name = product.Name;
-            existingProduct.Price = product.Price;
-            existingProduct.Description = product.Description;
-            existingProduct.Stock = product.Stock;
-            existingProduct.CategoryId = product.CategoryId;
+            var existingProduct = await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == product.Id);
+            if (existingProduct == null) return NotFound();
 
             if (imageFile != null && imageFile.Length > 0)
             {
                 DeleteImage(existingProduct.ImageUrl);
-                existingProduct.ImageUrl = await SaveImage(imageFile);
+                product.ImageUrl = await SaveImage(imageFile);
+            }
+            else
+            {
+                product.ImageUrl = existingProduct.ImageUrl;
             }
 
+            _context.Update(product);
             await _context.SaveChangesAsync();
-
             return RedirectToAction(nameof(Index));
         }
 
-        // =======================
-        // DELETE GET
-        // =======================
-        public async Task<IActionResult> Delete(int id)
-        {
-            var product = await _context.Products
-                .Include(p => p.Category)
-                .FirstOrDefaultAsync(p => p.Id == id);
-
-            if (product == null)
-                return NotFound();
-
-            return View("~/Areas/Admin/Views/Admin/Delete.cshtml", product);
-        }
-
-        // =======================
-        // DELETE POST
-        // =======================
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var product = await _context.Products.FindAsync(id);
-
             if (product != null)
             {
                 DeleteImage(product.ImageUrl);
                 _context.Products.Remove(product);
                 await _context.SaveChangesAsync();
             }
-
             return RedirectToAction(nameof(Index));
         }
 
-        // =======================
-        // MARCAR / DESMARCAR BANNER HOME (UNO ACTIVO)
-        // =======================
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ToggleBanner(int id)
         {
             var product = await _context.Products.FindAsync(id);
-            if (product == null)
-                return NotFound();
+            if (product == null) return NotFound();
 
             if (!product.IsHomeBanner)
             {
-                var activeBanners = await _context.Products
-                    .Where(p => p.IsHomeBanner)
-                    .ToListAsync();
-
-                foreach (var banner in activeBanners)
-                {
-                    banner.IsHomeBanner = false;
-                }
-
+                var activeBanners = await _context.Products.Where(p => p.IsHomeBanner).ToListAsync();
+                foreach (var banner in activeBanners) banner.IsHomeBanner = false;
                 product.IsHomeBanner = true;
             }
-            else
-            {
-                product.IsHomeBanner = false;
-            }
+            else product.IsHomeBanner = false;
 
             await _context.SaveChangesAsync();
-
             return RedirectToAction(nameof(Index));
         }
 
-        // =======================
-        // MÉTODOS AUXILIARES
-        // =======================
         private void LoadCategories(int? selectedId = null)
         {
             var categories = _context.Categories.ToList();
             ViewBag.Categories = new SelectList(categories, "Id", "Name", selectedId);
         }
 
+        // =======================
+        // MÉTODOS AUXILIARES CORREGIDOS (AVIF COMPATIBLE)
+        // =======================
+
         private async Task<string> SaveImage(IFormFile imageFile)
         {
-            string folder = Path.Combine(_environment.WebRootPath, "images/products");
-            Directory.CreateDirectory(folder);
-
-            string fileName = Guid.NewGuid() + Path.GetExtension(imageFile.FileName);
-            string path = Path.Combine(folder, fileName);
-
-            using var stream = new FileStream(path, FileMode.Create);
-            await imageFile.CopyToAsync(stream);
-
-            return "/images/products/" + fileName;
+            var uploadResult = new ImageUploadResult();
+            using (var stream = imageFile.OpenReadStream())
+            {
+                var uploadParams = new ImageUploadParams()
+                {
+                    File = new FileDescription(imageFile.FileName, stream),
+                    Folder = "ecommerce_productos", 
+                    // FetchFormat = auto permite que Cloudinary optimice AVIF según el navegador
+                    Transformation = new Transformation().Width(800).Height(800).Crop("limit").FetchFormat("auto").Quality("auto")
+                };
+                uploadResult = await _cloudinary.UploadAsync(uploadParams);
+            }
+            return uploadResult.SecureUrl.ToString(); 
         }
 
         private void DeleteImage(string? imageUrl)
         {
-            if (string.IsNullOrEmpty(imageUrl))
+            if (string.IsNullOrEmpty(imageUrl) || !imageUrl.Contains("res.cloudinary.com"))
                 return;
 
-            string path = Path.Combine(
-                _environment.WebRootPath,
-                imageUrl.TrimStart('/')
-            );
-
-            if (System.IO.File.Exists(path))
-                System.IO.File.Delete(path);
+            try
+            {
+                // Lógica mejorada para extraer PublicID ignorando extensiones complejas como .avif
+                var uri = new Uri(imageUrl);
+                var lastSegment = uri.Segments.Last();
+                
+                // Quitamos la extensión (pueden ser .jpg, .png, .avif, etc)
+                var publicIdWithoutExtension = Path.GetFileNameWithoutExtension(lastSegment);
+                
+                // Construimos el PublicId exacto incluyendo la carpeta
+                var publicId = "ecommerce_productos/" + publicIdWithoutExtension;
+                
+                _cloudinary.Destroy(new DeletionParams(publicId) { ResourceType = ResourceType.Image });
+            }
+            catch { /* Silencioso para no interrumpir el flujo del usuario */ }
         }
     }
 }
