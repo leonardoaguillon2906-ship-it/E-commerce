@@ -4,6 +4,7 @@ using MercadoPago.Resource.Preference;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System; // ✅ Necesario para Environment
 
 namespace EcommerceApp.Services.Payments
 {
@@ -15,13 +16,19 @@ namespace EcommerceApp.Services.Payments
         {
             _configuration = configuration;
 
-            MercadoPagoConfig.AccessToken =
-                _configuration["PaymentProviders:MercadoPago:AccessToken"];
+            // Prioriza la variable de entorno de Render, si no existe, usa appsettings.json
+            MercadoPagoConfig.AccessToken = Environment.GetEnvironmentVariable("MERCADOPAGO_ACCESS_TOKEN") 
+                ?? _configuration["PaymentProviders:MercadoPago:AccessToken"];
         }
 
         public async Task<string> CrearPago(decimal total, int orderId)
         {
             var client = new PreferenceClient();
+
+            // ✅ DETECCIÓN AUTOMÁTICA DE URL BASE
+            // Si existe la variable en Render la usa, sino usa ngrok o localhost para pruebas locales
+            string baseUrl = Environment.GetEnvironmentVariable("RENDER_EXTERNAL_URL") 
+                ?? "https://spectrohelioscopic-porpoiselike-wilber.ngrok-free.dev"; 
 
             var items = new List<PreferenceItemRequest>
             {
@@ -38,34 +45,25 @@ namespace EcommerceApp.Services.Payments
             {
                 Items = items,
 
-                // 🔥 WEBHOOK DIRECTO (CRÍTICO)
-                NotificationUrl = _configuration["PaymentProviders:MercadoPago:WebhookUrl"],
+                // ✅ WEBHOOK DINÁMICO
+                NotificationUrl = $"{baseUrl}/Cliente/Checkout/Webhook",
 
+                // ✅ BACKURLS DINÁMICAS (Arregla el error ERR_NGROK_3200)
                 BackUrls = new PreferenceBackUrlsRequest
                 {
-                    Success = "https://spectrohelioscopic-porpoiselike-wilber.ngrok-free.dev/Cliente/Checkout/Success",
-                    Failure = "https://spectrohelioscopic-porpoiselike-wilber.ngrok-free.dev/Cliente/Checkout/Failure",
-                    Pending = "https://spectrohelioscopic-porpoiselike-wilber.ngrok-free.dev/Cliente/Checkout/Pending"
+                    Success = $"{baseUrl}/Cliente/Checkout/Success",
+                    Failure = $"{baseUrl}/Cliente/Checkout/Failure",
+                    Pending = $"{baseUrl}/Cliente/Checkout/Pending"
                 },
 
                 AutoReturn = "approved",
-
-                // ❌ QUITAMOS BinaryMode (rompe tarjetas en sandbox)
-                // BinaryMode = true,
-
-                // ❌ NO forzar cuotas
-                // PaymentMethods = new PreferencePaymentMethodsRequest
-                // {
-                //     Installments = 1,
-                //     DefaultInstallments = 1
-                // },
-
                 ExternalReference = orderId.ToString()
             };
 
             var result = await client.CreateAsync(preference);
 
-            return result.SandboxInitPoint;
+            // Cambiar a result.InitPoint cuando pases a producción (producción usa links reales)
+            return result.SandboxInitPoint; 
         }
     }
 }
