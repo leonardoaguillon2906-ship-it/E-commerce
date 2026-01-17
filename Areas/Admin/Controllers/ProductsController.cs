@@ -25,13 +25,15 @@ namespace EcommerceApp.Areas.Admin.Controllers
             _environment = environment;
 
             // ✅ CONFIGURACIÓN SEGURA CON VARIABLES DE ENTORNO
+            // Cloudinary buscará estas Keys en el panel de Render -> Environment
             var cloudName = Environment.GetEnvironmentVariable("CLOUDINARY_CLOUD_NAME");
             var apiKey = Environment.GetEnvironmentVariable("CLOUDINARY_API_KEY");
             var apiSecret = Environment.GetEnvironmentVariable("CLOUDINARY_API_SECRET");
 
             if (string.IsNullOrEmpty(cloudName))
             {
-                // Solo para pruebas locales
+                // Solo para pruebas locales si no has configurado las variables aún
+                // Una vez que funcione en Render, puedes borrar este bloque 'else'
                 var account = new Account("TU_CLOUD_NAME", "TU_API_KEY", "TU_API_SECRET");
                 _cloudinary = new Cloudinary(account);
             }
@@ -169,15 +171,15 @@ namespace EcommerceApp.Areas.Admin.Controllers
             return RedirectToAction(nameof(Index));
         }
 
+        // =======================
+        // MÉTODOS AUXILIARES MEJORADOS
+        // =======================
+
         private void LoadCategories(int? selectedId = null)
         {
             var categories = _context.Categories.ToList();
             ViewBag.Categories = new SelectList(categories, "Id", "Name", selectedId);
         }
-
-        // =======================
-        // MÉTODOS AUXILIARES CORREGIDOS (AVIF COMPATIBLE)
-        // =======================
 
         private async Task<string> SaveImage(IFormFile imageFile)
         {
@@ -188,8 +190,7 @@ namespace EcommerceApp.Areas.Admin.Controllers
                 {
                     File = new FileDescription(imageFile.FileName, stream),
                     Folder = "ecommerce_productos", 
-                    // FetchFormat = auto permite que Cloudinary optimice AVIF según el navegador
-                    Transformation = new Transformation().Width(800).Height(800).Crop("limit").FetchFormat("auto").Quality("auto")
+                    Transformation = new Transformation().Width(800).Height(800).Crop("limit")
                 };
                 uploadResult = await _cloudinary.UploadAsync(uploadParams);
             }
@@ -203,19 +204,14 @@ namespace EcommerceApp.Areas.Admin.Controllers
 
             try
             {
-                // Lógica mejorada para extraer PublicID ignorando extensiones complejas como .avif
                 var uri = new Uri(imageUrl);
-                var lastSegment = uri.Segments.Last();
-                
-                // Quitamos la extensión (pueden ser .jpg, .png, .avif, etc)
-                var publicIdWithoutExtension = Path.GetFileNameWithoutExtension(lastSegment);
-                
-                // Construimos el PublicId exacto incluyendo la carpeta
-                var publicId = "ecommerce_productos/" + publicIdWithoutExtension;
-                
-                _cloudinary.Destroy(new DeletionParams(publicId) { ResourceType = ResourceType.Image });
+                // Extrae el nombre del archivo sin extensión
+                var fileName = Path.GetFileNameWithoutExtension(uri.Segments.Last());
+                // El PublicId incluye la carpeta
+                var publicId = "ecommerce_productos/" + fileName;
+                _cloudinary.Destroy(new DeletionParams(publicId));
             }
-            catch { /* Silencioso para no interrumpir el flujo del usuario */ }
+            catch { /* Evitar que el error de borrado bloquee la app */ }
         }
     }
 }
