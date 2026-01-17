@@ -29,11 +29,16 @@ namespace EcommerceApp.Areas.Admin.Controllers
             var apiKey = Environment.GetEnvironmentVariable("CLOUDINARY_API_KEY");
             var apiSecret = Environment.GetEnvironmentVariable("CLOUDINARY_API_SECRET");
 
-            // Solo inicializa Cloudinary si las variables existen para evitar Error 500 al iniciar la App
-            if (!string.IsNullOrEmpty(cloudName) && !string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(apiSecret))
+            // Diagnóstico simple para Logs de Render
+            if (string.IsNullOrEmpty(cloudName) || string.IsNullOrEmpty(apiKey) || string.IsNullOrEmpty(apiSecret))
+            {
+                Console.WriteLine("⚠️ Alerta: Cloudinary no se inicializó. Revisa las Variables de Entorno en Render.");
+            }
+            else
             {
                 var account = new Account(cloudName, apiKey, apiSecret);
                 _cloudinary = new Cloudinary(account);
+                Console.WriteLine("✅ Cloudinary conectado exitosamente.");
             }
         }
 
@@ -41,9 +46,7 @@ namespace EcommerceApp.Areas.Admin.Controllers
         {
             int pageSize = 10;
             ViewBag.Categories = await _context.Categories.ToListAsync();
-            ViewBag.Search = search;
-            ViewBag.CategoryId = categoryId;
-
+            
             var query = _context.Products.Include(p => p.Category).AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -75,9 +78,6 @@ namespace EcommerceApp.Areas.Admin.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(Product product, IFormFile? imageFile)
         {
-            if (!await _context.Categories.AnyAsync(c => c.Id == product.CategoryId))
-                ModelState.AddModelError("CategoryId", "La categoría seleccionada no existe.");
-
             if (!ModelState.IsValid)
             {
                 LoadCategories(product.CategoryId);
@@ -107,18 +107,16 @@ namespace EcommerceApp.Areas.Admin.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(Product product, IFormFile? imageFile)
         {
-            if (!ModelState.IsValid)
-            {
-                LoadCategories(product.CategoryId);
-                return View("~/Areas/Admin/Views/Admin/Edit.cshtml", product);
-            }
-
             var existingProduct = await _context.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == product.Id);
             if (existingProduct == null) return NotFound();
 
             if (imageFile != null && imageFile.Length > 0)
             {
-                DeleteImage(existingProduct.ImageUrl);
+                // Solo intentamos borrar de Cloudinary si la URL es válida
+                if (!string.IsNullOrEmpty(existingProduct.ImageUrl))
+                {
+                    DeleteImage(existingProduct.ImageUrl);
+                }
                 product.ImageUrl = await SaveImage(imageFile);
             }
             else
@@ -138,7 +136,10 @@ namespace EcommerceApp.Areas.Admin.Controllers
             var product = await _context.Products.FindAsync(id);
             if (product != null)
             {
-                DeleteImage(product.ImageUrl);
+                if (!string.IsNullOrEmpty(product.ImageUrl))
+                {
+                    DeleteImage(product.ImageUrl);
+                }
                 _context.Products.Remove(product);
                 await _context.SaveChangesAsync();
             }
@@ -166,36 +167,30 @@ namespace EcommerceApp.Areas.Admin.Controllers
 
         private void LoadCategories(int? selectedId = null)
         {
-            var categories = _context.Categories.ToList();
-            ViewBag.Categories = new SelectList(categories, "Id", "Name", selectedId);
+            ViewBag.Categories = new SelectList(_context.Categories.ToList(), "Id", "Name", selectedId);
         }
-
-        // =======================
-        // MÉTODOS AUXILIARES OPTIMIZADOS
-        // =======================
 
         private async Task<string> SaveImage(IFormFile imageFile)
         {
-            if (_cloudinary == null) return ""; // Retorna vacío si Cloudinary no está configurado
+            if (_cloudinary == null) return "";
 
-            var uploadResult = new ImageUploadResult();
-            using (var stream = imageFile.OpenReadStream())
+            try 
             {
+                using var stream = imageFile.OpenReadStream();
                 var uploadParams = new ImageUploadParams()
                 {
                     File = new FileDescription(imageFile.FileName, stream),
                     Folder = "ecommerce_productos", 
-                    // Optimización: FetchFormat auto elige AVIF/WebP según el navegador, Quality auto reduce peso
-                    Transformation = new Transformation()
-                        .Width(800)
-                        .Height(800)
-                        .Crop("limit")
-                        .FetchFormat("auto")
-                        .Quality("auto")
+                    Transformation = new Transformation().Width(800).Height(800).Crop("limit").Quality("auto").FetchFormat("auto")
                 };
-                uploadResult = await _cloudinary.UploadAsync(uploadParams);
+                var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+                return uploadResult.SecureUrl?.ToString() ?? ""; 
             }
-            return uploadResult.SecureUrl?.ToString() ?? ""; 
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error al subir a Cloudinary: " + ex.Message);
+                return "";
+            }
         }
 
         private void DeleteImage(string? imageUrl)
@@ -208,10 +203,12 @@ namespace EcommerceApp.Areas.Admin.Controllers
                 var uri = new Uri(imageUrl);
                 var fileName = Path.GetFileNameWithoutExtension(uri.Segments.Last());
                 var publicId = "ecommerce_productos/" + fileName;
-                
-                _cloudinary.Destroy(new DeletionParams(publicId) { ResourceType = ResourceType.Image });
+                _cloudinary.Destroy(new DeletionParams(publicId));
             }
-            catch { /* Silencioso para no interrumpir el flujo de datos */ }
+            catch (Exception ex) 
+            { 
+                Console.WriteLine("Error al borrar de Cloudinary: " + ex.Message); 
+            }
         }
     }
 }
