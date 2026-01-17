@@ -24,7 +24,7 @@
             <th>Stock</th>
             <th>Categoría</th>
             <th>Banner</th>
-            <th style="width:200px;">Acciones</th>
+            <th style="width:250px;">Acciones</th>
         </tr>
     </thead>
     <tbody>
@@ -41,11 +41,8 @@
             foreach (var item in Model)
             {
                 <tr>
-                    <!-- Imagen -->
                     <td class="text-center">
-                        <img src="@(string.IsNullOrEmpty(item.ImageUrl)
-                            ? "/images/no-image.png"
-                            : item.ImageUrl)"
+                        <img src="@(string.IsNullOrEmpty(item.ImageUrl) ? "https://placehold.co/80x80/666/fff?text=Sin+Foto" : item.ImageUrl)"
                              alt="@item.Name"
                              style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #ddd;" />
                     </td>
@@ -69,7 +66,6 @@
 
                     <td>@item.Category?.Name</td>
 
-                    <!-- Banner -->
                     <td class="text-center">
                         @if (item.IsHomeBanner)
                         {
@@ -81,31 +77,30 @@
                         }
                     </td>
 
-                    <!-- Acciones -->
                     <td class="text-center">
-                        <a asp-area="Admin"
-                           asp-controller="Products"
-                           asp-action="Edit"
-                           asp-route-id="@item.Id"
-                           class="btn btn-sm btn-warning">
-                            Editar
-                        </a>
+                        <div class="d-flex justify-content-center gap-1">
+                            <a asp-area="Admin"
+                               asp-controller="Products"
+                               asp-action="Edit"
+                               asp-route-id="@item.Id"
+                               class="btn btn-sm btn-warning">
+                                Editar
+                            </a>
 
-                        <a asp-area="Admin"
-                           asp-controller="Products"
-                           asp-action="ToggleBanner"
-                           asp-route-id="@item.Id"
-                           class="btn btn-sm btn-info ms-1">
-                            Banner
-                        </a>
+                            <form asp-area="Admin" asp-controller="Products" asp-action="ToggleBanner" asp-route-id="@item.Id" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm @(item.IsHomeBanner ? "btn-secondary" : "btn-info")">
+                                    Banner
+                                </button>
+                            </form>
 
-                        <a asp-area="Admin"
-                           asp-controller="Products"
-                           asp-action="Delete"
-                           asp-route-id="@item.Id"
-                           class="btn btn-sm btn-danger ms-1">
-                            Eliminar
-                        </a>
+                            <form asp-area="Admin" asp-controller="Products" asp-action="Delete" asp-route-id="@item.Id" method="post" class="d-inline" onsubmit="return confirm('¿Está seguro de eliminar este producto?');">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-danger">
+                                    Eliminar
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
             }
