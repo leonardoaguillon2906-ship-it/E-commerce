@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
+// AGREGADOS PARA SOPORTE DE IMÁGENES
+using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +19,13 @@ builder.Services.AddControllersWithViews()
     .AddJsonOptions(options => options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles);
 
 builder.Services.AddControllers();
+
+// ✅ AGREGADO: Aumentar límite de carga para archivos de imagen pesados
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
+});
+
 builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeAreaFolder("Identity", "/");
@@ -84,7 +94,17 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
+
+// ✅ MODIFICADO: Configuración de tipos de archivo para AVIF y WebP
+var provider = new FileExtensionContentTypeProvider();
+provider.Mappings[".avif"] = "image/avif";
+provider.Mappings[".webp"] = "image/webp";
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = provider
+});
+
 app.UseRouting();
 app.UseSession();
 app.UseAuthentication();
@@ -110,13 +130,9 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
-        // IMPORTANTE: La línea de DROP SCHEMA ha sido eliminada para proteger tus datos.
-        // Las tablas ya existen, así que Migrate solo aplicará cambios nuevos en el futuro.
-        
         logger.LogInformation("Verificando actualizaciones de base de datos...");
         await context.Database.MigrateAsync();
 
-        // Los seeders están programados internamente para no duplicar datos si ya existen
         await RoleSeeder.SeedRolesAsync(services);
         await SeedAdminUser.CreateAsync(services);
         
@@ -137,6 +153,7 @@ app.MapControllerRoute(name: "default", pattern: "{controller=Home}/{action=Inde
 app.MapRazorPages();
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
-app.Urls.Add($"http://*:{port}");
+// ✅ IMPORTANTE: Se ajusta para que Render escuche correctamente
+app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();

@@ -15,7 +15,7 @@ namespace EcommerceApp.Areas.Admin.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _environment;
-        private readonly Cloudinary _cloudinary; 
+        private readonly Cloudinary? _cloudinary; 
 
         public ProductsController(
             ApplicationDbContext context,
@@ -25,19 +25,12 @@ namespace EcommerceApp.Areas.Admin.Controllers
             _environment = environment;
 
             // ✅ CONFIGURACIÓN SEGURA CON VARIABLES DE ENTORNO
-            // Cloudinary buscará estas Keys en el panel de Render -> Environment
             var cloudName = Environment.GetEnvironmentVariable("CLOUDINARY_CLOUD_NAME");
             var apiKey = Environment.GetEnvironmentVariable("CLOUDINARY_API_KEY");
             var apiSecret = Environment.GetEnvironmentVariable("CLOUDINARY_API_SECRET");
 
-            if (string.IsNullOrEmpty(cloudName))
-            {
-                // Solo para pruebas locales si no has configurado las variables aún
-                // Una vez que funcione en Render, puedes borrar este bloque 'else'
-                var account = new Account("TU_CLOUD_NAME", "TU_API_KEY", "TU_API_SECRET");
-                _cloudinary = new Cloudinary(account);
-            }
-            else
+            // Solo inicializa Cloudinary si las variables existen para evitar Error 500 al iniciar la App
+            if (!string.IsNullOrEmpty(cloudName) && !string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(apiSecret))
             {
                 var account = new Account(cloudName, apiKey, apiSecret);
                 _cloudinary = new Cloudinary(account);
@@ -171,18 +164,20 @@ namespace EcommerceApp.Areas.Admin.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // =======================
-        // MÉTODOS AUXILIARES MEJORADOS
-        // =======================
-
         private void LoadCategories(int? selectedId = null)
         {
             var categories = _context.Categories.ToList();
             ViewBag.Categories = new SelectList(categories, "Id", "Name", selectedId);
         }
 
+        // =======================
+        // MÉTODOS AUXILIARES OPTIMIZADOS
+        // =======================
+
         private async Task<string> SaveImage(IFormFile imageFile)
         {
+            if (_cloudinary == null) return ""; // Retorna vacío si Cloudinary no está configurado
+
             var uploadResult = new ImageUploadResult();
             using (var stream = imageFile.OpenReadStream())
             {
@@ -190,28 +185,33 @@ namespace EcommerceApp.Areas.Admin.Controllers
                 {
                     File = new FileDescription(imageFile.FileName, stream),
                     Folder = "ecommerce_productos", 
-                    Transformation = new Transformation().Width(800).Height(800).Crop("limit")
+                    // Optimización: FetchFormat auto elige AVIF/WebP según el navegador, Quality auto reduce peso
+                    Transformation = new Transformation()
+                        .Width(800)
+                        .Height(800)
+                        .Crop("limit")
+                        .FetchFormat("auto")
+                        .Quality("auto")
                 };
                 uploadResult = await _cloudinary.UploadAsync(uploadParams);
             }
-            return uploadResult.SecureUrl.ToString(); 
+            return uploadResult.SecureUrl?.ToString() ?? ""; 
         }
 
         private void DeleteImage(string? imageUrl)
         {
-            if (string.IsNullOrEmpty(imageUrl) || !imageUrl.Contains("res.cloudinary.com"))
+            if (_cloudinary == null || string.IsNullOrEmpty(imageUrl) || !imageUrl.Contains("res.cloudinary.com"))
                 return;
 
             try
             {
                 var uri = new Uri(imageUrl);
-                // Extrae el nombre del archivo sin extensión
                 var fileName = Path.GetFileNameWithoutExtension(uri.Segments.Last());
-                // El PublicId incluye la carpeta
                 var publicId = "ecommerce_productos/" + fileName;
-                _cloudinary.Destroy(new DeletionParams(publicId));
+                
+                _cloudinary.Destroy(new DeletionParams(publicId) { ResourceType = ResourceType.Image });
             }
-            catch { /* Evitar que el error de borrado bloquee la app */ }
+            catch { /* Silencioso para no interrumpir el flujo de datos */ }
         }
     }
 }
