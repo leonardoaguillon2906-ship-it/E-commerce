@@ -15,45 +15,6 @@
     + Nuevo Producto
 </a>
 
-<form method="get" class="row g-2 mb-3 align-items-end">
-
-    <div class="col-md-4">
-        <label class="form-label">Buscar</label>
-        <input type="text"
-               name="search"
-               value="@ViewBag.Search"
-               class="form-control"
-               placeholder="Nombre del producto..." />
-    </div>
-
-    <div class="col-md-4">
-        <label class="form-label">Categoría</label>
-        <select name="categoryId" class="form-select">
-            <option value="">Todas</option>
-            @if (ViewBag.Categories != null)
-            {
-                foreach (var cat in ViewBag.Categories)
-                {
-                    <option value="@cat.Id" selected="@(ViewBag.CategoryId == cat.Id)">
-                        @cat.Name
-                    </option>
-                }
-            }
-        </select>
-    </div>
-
-    <div class="col-md-4">
-        <button type="submit" class="btn btn-outline-primary me-1">
-            Filtrar
-        </button>
-
-        <a asp-action="Index" class="btn btn-outline-secondary">
-            Limpiar
-        </a>
-    </div>
-
-</form>
-
 <table class="table table-bordered table-hover align-middle">
     <thead class="table-dark">
         <tr class="text-center">
@@ -83,7 +44,7 @@
                     <td class="text-center">
                         <img src="@(string.IsNullOrEmpty(item.ImageUrl) ? "https://placehold.co/80x80?text=Sin+Foto" : item.ImageUrl)"
                              alt="@item.Name"
-                             onerror="this.src='https://placehold.co/80x80?text=Error+Link';"
+                             onerror="this.src='https://placehold.co/80x80?text=Error+URL';"
                              style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #ddd;" />
                     </td>
 
@@ -137,13 +98,13 @@
                                 @Html.AntiForgeryToken()
                                 <button type="submit"
                                         class="btn btn-sm @(item.IsHomeBanner ? "btn-secondary" : "btn-info")">
-                                    @(item.IsHomeBanner ? "Quitar Banner" : "Banner")
+                                    @(item.IsHomeBanner ? "Banner" : "Banner")
                                 </button>
                             </form>
 
                             <form asp-area="Admin" 
                                   asp-controller="Products" 
-                                  asp-action="DeleteConfirmed" 
+                                  asp-action="Delete" 
                                   asp-route-id="@item.Id" 
                                   method="post" 
                                   class="d-inline"
@@ -160,25 +121,3 @@
         }
     </tbody>
 </table>
-
-@if (ViewBag.TotalPages != null && ViewBag.TotalPages > 1)
-{
-    <nav class="mt-3">
-        <ul class="pagination justify-content-center">
-
-            @for (int i = 1; i <= ViewBag.TotalPages; i++)
-            {
-                <li class="page-item @(i == ViewBag.CurrentPage ? "active" : "")">
-                    <a class="page-link"
-                       asp-action="Index"
-                       asp-route-page="@i"
-                       asp-route-search="@ViewBag.Search"
-                       asp-route-categoryId="@ViewBag.CategoryId">
-                        @i
-                    </a>
-                </li>
-            }
-
-        </ul>
-    </nav>
-}
