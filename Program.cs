@@ -133,22 +133,26 @@ app.Use(async (context, next) =>
 
 // =======================
 // MANTENIMIENTO AUTOMÁTICO
+// ⚠️ SOLO EN DESARROLLO
 // =======================
-using (var scope = app.Services.CreateScope())
+if (app.Environment.IsDevelopment())
 {
-    var services = scope.ServiceProvider;
-    var context = services.GetRequiredService<ApplicationDbContext>();
-    var logger = services.GetRequiredService<ILogger<Program>>();
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        var logger = services.GetRequiredService<ILogger<Program>>();
 
-    try
-    {
-        await context.Database.MigrateAsync();
-        await RoleSeeder.SeedRolesAsync(services);
-        await SeedAdminUser.CreateAsync(services);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error durante la inicialización automática.");
+        try
+        {
+            await context.Database.MigrateAsync();
+            await RoleSeeder.SeedRolesAsync(services);
+            await SeedAdminUser.CreateAsync(services);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error durante la inicialización automática.");
+        }
     }
 }
 
@@ -156,12 +160,15 @@ using (var scope = app.Services.CreateScope())
 // RUTAS Y LANZAMIENTO
 // =======================
 app.MapControllers();
+
 app.MapControllerRoute(
     name: "areas",
     pattern: "{area:exists}/{controller=Products}/{action=Index}/{id?}");
+
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
+
 app.MapRazorPages();
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
