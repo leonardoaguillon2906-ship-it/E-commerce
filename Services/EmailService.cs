@@ -4,14 +4,12 @@ using System;
 using System.Net;
 using System.Net.Mail;
 using System.Threading.Tasks;
+using EcommerceApp.Models; // ✅ Necesario para reconocer el objeto Order
 
 namespace EcommerceApp.Services
 {
-    /// <summary>
-    /// Servicio de envío de correos.
-    /// Implementa IEmailSender para compatibilidad con ASP.NET Identity.
-    /// </summary>
-    public class EmailService : IEmailSender
+    // ✅ Línea 36 corregida: Ahora implementa ambas interfaces
+    public class EmailService : IEmailSender, IEmailService 
     {
         private readonly IConfiguration _config;
 
@@ -21,8 +19,28 @@ namespace EcommerceApp.Services
         }
 
         // =====================================================
-        // MÉTODO REQUERIDO POR ASP.NET IDENTITY
-        // (ForgotPassword, ConfirmEmail, etc.)
+        // ✅ MÉTODO PARA EL CHECKOUT (Implementa IEmailService)
+        // =====================================================
+        public async Task SendOrderConfirmationEmail(Order order)
+        {
+            if (order?.User == null) return;
+
+            var subject = $"Confirmación de Pedido #{order.Id}";
+            var body = $@"
+                <html>
+                    <body>
+                        <h2 style='color: #d35400;'>¡Gracias por tu compra!</h2>
+                        <p>Hola {order.User.FullName}, hemos recibido tu pedido.</p>
+                        <p><strong>Total:</strong> {order.Total:C}</p>
+                        <p>Tu pedido será procesado a la brevedad.</p>
+                    </body>
+                </html>";
+
+            await EnviarCorreoAsync(order.User.Email, subject, body);
+        }
+
+        // =====================================================
+        // MÉTODOS DE IDENTIDAD (IEmailSender)
         // =====================================================
         public async Task SendEmailAsync(string email, string subject, string htmlMessage)
         {
@@ -30,7 +48,7 @@ namespace EcommerceApp.Services
         }
 
         // =====================================================
-        // MÉTODO PRINCIPAL DE TU APLICACIÓN
+        // LÓGICA SMTP ORIGINAL (Sin borrar nada)
         // =====================================================
         public async Task EnviarCorreoAsync(string to, string subject, string body)
         {
@@ -44,14 +62,11 @@ namespace EcommerceApp.Services
             var senderEmail = _config["EmailSettings:SenderEmail"];
             var senderName = _config["EmailSettings:SenderName"];
 
-            if (string.IsNullOrEmpty(smtpHost) ||
-                string.IsNullOrEmpty(smtpPort) ||
-                string.IsNullOrEmpty(username) ||
-                string.IsNullOrEmpty(password) ||
+            if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpPort) ||
+                string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password) ||
                 string.IsNullOrEmpty(senderEmail))
             {
-                throw new InvalidOperationException(
-                    "La configuración EmailSettings es inválida o incompleta");
+                throw new InvalidOperationException("Configuración de Email incompleta");
             }
 
             using var smtp = new SmtpClient
@@ -71,13 +86,9 @@ namespace EcommerceApp.Services
             };
 
             mail.To.Add(to);
-
             await smtp.SendMailAsync(mail);
         }
 
-        // =====================================================
-        // MÉTODO FACHADA / COMPATIBILIDAD INTERNA
-        // =====================================================
         public async Task SendAsync(string to, string subject, string body)
         {
             await EnviarCorreoAsync(to, subject, body);

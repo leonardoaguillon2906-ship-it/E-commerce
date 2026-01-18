@@ -5,7 +5,7 @@ namespace EcommerceApp.Services
 {
     public interface IEmailService
     {
-        // Este es el método que invoca tu CheckoutController
+        // Este método es el que busca el CheckoutController
         Task SendOrderConfirmationEmail(Order order);
     }
 }

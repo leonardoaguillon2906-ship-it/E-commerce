@@ -6,6 +6,12 @@ namespace EcommerceApp.Models
     public class ApplicationUser : IdentityUser
     {
         // ============================
+        // DATOS PERSONALIZADOS
+        // ============================
+        // ✅ AGREGADO: Propiedad para almacenar el nombre completo del usuario
+        public string? FullName { get; set; }
+
+        // ============================
         // RELACIÓN: CARRITO DE COMPRAS
         // ============================
         public virtual ICollection<CartItem> CartItems { get; set; }
