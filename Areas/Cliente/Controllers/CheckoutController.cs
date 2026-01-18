@@ -1,5 +1,6 @@
 using EcommerceApp.Data;
 using EcommerceApp.Models;
+using EcommerceApp.Services;
 using EcommerceApp.Services.Payments;
 using EcommerceApp.Helpers;
 using Microsoft.AspNetCore.Mvc;
@@ -19,11 +20,19 @@ namespace EcommerceApp.Areas.Cliente.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly MercadoPagoService _mercadoPagoService;
+        private readonly IEmailService _emailService;
+        private readonly EmailTemplateService _emailTemplateService;
 
-        public CheckoutController(ApplicationDbContext context, MercadoPagoService mercadoPagoService)
+        public CheckoutController(
+            ApplicationDbContext context,
+            MercadoPagoService mercadoPagoService,
+            IEmailService emailService,
+            EmailTemplateService emailTemplateService)
         {
             _context = context;
             _mercadoPagoService = mercadoPagoService;
+            _emailService = emailService;
+            _emailTemplateService = emailTemplateService;
         }
 
         [HttpGet]
@@ -50,7 +59,6 @@ namespace EcommerceApp.Areas.Cliente.Controllers
             if (string.IsNullOrEmpty(userId))
                 return RedirectToAction("Login", "Account");
 
-            // Validar stock antes de crear la orden
             foreach (var item in cart)
             {
                 var product = await _context.Products.FindAsync(item.ProductId);
@@ -88,7 +96,6 @@ namespace EcommerceApp.Areas.Cliente.Controllers
             await _context.SaveChangesAsync();
 
             var initPoint = await _mercadoPagoService.CrearPago(order.Total, order.Id);
-
             return Redirect(initPoint);
         }
 
@@ -101,24 +108,38 @@ namespace EcommerceApp.Areas.Cliente.Controllers
             if (!string.IsNullOrEmpty(external_reference) &&
                 int.TryParse(external_reference, out int orderId))
             {
-                // Cargar la orden con sus productos
                 order = await _context.Orders
                     .Include(o => o.OrderItems)
                         .ThenInclude(oi => oi.Product)
                     .FirstOrDefaultAsync(o => o.Id == orderId);
 
-                // Limpiar carrito
                 HttpContext.Session.Remove("CART");
 
-                // Solo marcar como Procesando si está pendiente
                 if (order != null && order.Status == "Pendiente")
                 {
-                    order.Status = "Procesando"; // El stock se descuenta en webhook
+                    order.Status = "Procesando";
                     await _context.SaveChangesAsync();
+
+                    // ENVÍO DE EMAIL (USANDO CONTRATOS REALES)
+                    var userEmail = await _context.Users
+                        .Where(u => u.Id == order.UserId)
+                        .Select(u => u.Email)
+                        .FirstOrDefaultAsync();
+
+                    if (!string.IsNullOrEmpty(userEmail))
+                    {
+                        var template = await _emailTemplateService.LoadAsync("OrderSuccess.html");
+
+                        var body = template
+                            .Replace("{{ORDER_ID}}", order.Id.ToString())
+                            .Replace("{{TOTAL}}", order.Total.ToString("C"));
+
+                        await _emailService.SendOrderConfirmationEmail(order);
+                    }
                 }
             }
 
-            return View(order); // Pasamos la orden completa a la vista
+            return View(order);
         }
 
         [HttpGet]

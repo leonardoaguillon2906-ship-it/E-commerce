@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
-// AGREGADOS PARA SOPORTE DE IMÁGENES
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Http.Features;
 
@@ -16,14 +15,14 @@ var builder = WebApplication.CreateBuilder(args);
 // SERVICIOS BASE
 // =======================
 builder.Services.AddControllersWithViews()
-    .AddJsonOptions(options => options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles);
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles);
 
 builder.Services.AddControllers();
 
-// ✅ AGREGADO: Aumentar límite de carga para archivos de imagen pesados
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024;
 });
 
 builder.Services.AddRazorPages(options =>
@@ -35,16 +34,21 @@ builder.Services.AddRazorPages(options =>
 // SERVICIOS PERSONALIZADOS
 // =======================
 builder.Services.AddScoped<PasswordService>();
+
+// 🔹 EMAIL (CONFIGURACIÓN CORRECTA Y COMPLETA)
 builder.Services.AddScoped<IEmailSender, EmailService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<EmailTemplateService>();
+
 builder.Services.AddScoped<MercadoPagoService>();
 
 // =======================
 // CONFIGURACIÓN DE POSTGRESQL
 // =======================
 var connectionString = builder.Environment.IsDevelopment()
-    ? builder.Configuration.GetConnectionString("DefaultConnection") 
+    ? builder.Configuration.GetConnectionString("DefaultConnection")
     : $"Host={Environment.GetEnvironmentVariable("DATABASE_HOST")};" +
       $"Port={Environment.GetEnvironmentVariable("DATABASE_PORT")};" +
       $"Database={Environment.GetEnvironmentVariable("DATABASE_NAME")};" +
@@ -61,6 +65,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // IDENTITY, SESSION & COOKIES
 // =======================
 builder.Services.AddDistributedMemoryCache();
+
 builder.Services.AddSession(options =>
 {
     options.IdleTimeout = TimeSpan.FromMinutes(30);
@@ -95,7 +100,6 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// ✅ MODIFICADO: Configuración de tipos de archivo para AVIF y WebP
 var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".avif"] = "image/avif";
 provider.Mappings[".webp"] = "image/webp";
@@ -110,18 +114,25 @@ app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Redirecciones Identity
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value?.ToLower();
-    if (path == "/identity/account/login") { context.Response.Redirect("/Account/Login"); return; }
-    if (path == "/identity/account/register") { context.Response.Redirect("/Account/Register"); return; }
+    if (path == "/identity/account/login")
+    {
+        context.Response.Redirect("/Account/Login");
+        return;
+    }
+    if (path == "/identity/account/register")
+    {
+        context.Response.Redirect("/Account/Register");
+        return;
+    }
     await next();
 });
 
-// ============================================================
-// BLOQUE DE MANTENIMIENTO AUTOMÁTICO (SEGURO PARA DATOS)
-// ============================================================
+// =======================
+// MANTENIMIENTO AUTOMÁTICO
+// =======================
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -135,7 +146,7 @@ using (var scope = app.Services.CreateScope())
 
         await RoleSeeder.SeedRolesAsync(services);
         await SeedAdminUser.CreateAsync(services);
-        
+
         logger.LogInformation("Sistema de base de datos listo.");
     }
     catch (Exception ex)
@@ -148,12 +159,18 @@ using (var scope = app.Services.CreateScope())
 // RUTAS Y LANZAMIENTO
 // =======================
 app.MapControllers();
-app.MapControllerRoute(name: "areas", pattern: "{area:exists}/{controller=Products}/{action=Index}/{id?}");
-app.MapControllerRoute(name: "default", pattern: "{controller=Home}/{action=Index}/{id?}");
+
+app.MapControllerRoute(
+    name: "areas",
+    pattern: "{area:exists}/{controller=Products}/{action=Index}/{id?}");
+
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=Home}/{action=Index}/{id?}");
+
 app.MapRazorPages();
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
-// ✅ IMPORTANTE: Se ajusta para que Render escuche correctamente
 app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();

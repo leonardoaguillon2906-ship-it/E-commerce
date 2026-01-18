@@ -4,25 +4,34 @@ using System;
 using System.Net;
 using System.Net.Mail;
 using System.Threading.Tasks;
+using EcommerceApp.Models;
+using EcommerceApp.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace EcommerceApp.Services
 {
     /// <summary>
     /// Servicio de envío de correos.
-    /// Implementa IEmailSender para compatibilidad con ASP.NET Identity.
+    /// Implementa IEmailSender (Identity) e IEmailService (aplicación).
     /// </summary>
-    public class EmailService : IEmailSender
+    public class EmailService : IEmailSender, IEmailService
     {
         private readonly IConfiguration _config;
+        private readonly ApplicationDbContext _context;
+        private readonly IEmailTemplateService _emailTemplateService;
 
-        public EmailService(IConfiguration config)
+        public EmailService(
+            IConfiguration config,
+            ApplicationDbContext context,
+            IEmailTemplateService emailTemplateService)
         {
             _config = config;
+            _context = context;
+            _emailTemplateService = emailTemplateService;
         }
 
         // =====================================================
         // MÉTODO REQUERIDO POR ASP.NET IDENTITY
-        // (ForgotPassword, ConfirmEmail, etc.)
         // =====================================================
         public async Task SendEmailAsync(string email, string subject, string htmlMessage)
         {
@@ -30,7 +39,32 @@ namespace EcommerceApp.Services
         }
 
         // =====================================================
-        // MÉTODO PRINCIPAL DE TU APLICACIÓN
+        // MÉTODO REQUERIDO POR IEmailService (COMPRA)
+        // =====================================================
+        public async Task SendOrderConfirmationEmail(Order order)
+        {
+            if (order == null)
+                return;
+
+            var userEmail = await _context.Users
+                .Where(u => u.Id == order.UserId)
+                .Select(u => u.Email)
+                .FirstOrDefaultAsync();
+
+            if (string.IsNullOrEmpty(userEmail))
+                return;
+
+            string body = _emailTemplateService.GetOrderSuccessTemplate(order);
+
+            await EnviarCorreoAsync(
+                userEmail,
+                "Confirmación de tu compra",
+                body
+            );
+        }
+
+        // =====================================================
+        // MÉTODO PRINCIPAL DE ENVÍO SMTP (NO SE TOCA)
         // =====================================================
         public async Task EnviarCorreoAsync(string to, string subject, string body)
         {
@@ -76,7 +110,7 @@ namespace EcommerceApp.Services
         }
 
         // =====================================================
-        // MÉTODO FACHADA / COMPATIBILIDAD INTERNA
+        // MÉTODO FACHADA / USO INTERNO (SE CONSERVA)
         // =====================================================
         public async Task SendAsync(string to, string subject, string body)
         {
