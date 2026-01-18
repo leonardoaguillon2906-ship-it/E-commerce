@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EcommerceApp.Areas.Cliente.Controllers
 {
@@ -22,105 +23,127 @@ namespace EcommerceApp.Areas.Cliente.Controllers
         private readonly MercadoPagoService _mercadoPagoService;
         private readonly IEmailService _emailService;
         private readonly EmailTemplateService _emailTemplateService;
+        private readonly ILogger<CheckoutController> _logger;
 
         public CheckoutController(
             ApplicationDbContext context,
             MercadoPagoService mercadoPagoService,
             IEmailService emailService,
-            EmailTemplateService emailTemplateService)
+            EmailTemplateService emailTemplateService,
+            ILogger<CheckoutController> logger)
         {
             _context = context;
             _mercadoPagoService = mercadoPagoService;
             _emailService = emailService;
             _emailTemplateService = emailTemplateService;
+            _logger = logger;
         }
 
         [HttpGet]
         public IActionResult Index()
         {
-            var cart = HttpContext.Session.GetObject<List<CartItem>>("CART");
+            try
+            {
+                var cart = HttpContext.Session.GetObject<List<CartItem>>("CART");
 
-            if (cart == null || !cart.Any())
-                return RedirectToAction("Index", "Cart", new { area = "Cliente" });
+                if (cart == null || !cart.Any())
+                    return RedirectToAction("Index", "Cart", new { area = "Cliente" });
 
-            return View(cart);
+                return View(cart);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al cargar el carrito para Checkout");
+                return StatusCode(500, "Error al cargar el carrito.");
+            }
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Confirm()
         {
-            var cart = HttpContext.Session.GetObject<List<CartItem>>("CART");
-
-            if (cart == null || !cart.Any())
-                return RedirectToAction("Index", "Cart", new { area = "Cliente" });
-
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId))
-                return RedirectToAction("Login", "Account");
-
-            foreach (var item in cart)
+            try
             {
-                var product = await _context.Products.FindAsync(item.ProductId);
-                if (product == null || product.Stock < item.Quantity)
-                {
-                    TempData["Error"] = $"No hay stock suficiente para {item.Name}";
+                var cart = HttpContext.Session.GetObject<List<CartItem>>("CART");
+
+                if (cart == null || !cart.Any())
                     return RedirectToAction("Index", "Cart", new { area = "Cliente" });
-                }
-            }
 
-            var total = cart.Sum(i => i.Price * i.Quantity);
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                    return RedirectToAction("Login", "Account");
 
-            var order = new Order
-            {
-                UserId = userId,
-                Total = total,
-                Status = "Pendiente",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
-
-            foreach (var item in cart)
-            {
-                _context.OrderItems.Add(new OrderItem
+                foreach (var item in cart)
                 {
-                    OrderId = order.Id,
-                    ProductId = item.ProductId,
-                    Quantity = item.Quantity,
-                    Price = item.Price
-                });
+                    var product = await _context.Products.FindAsync(item.ProductId);
+                    if (product == null || product.Stock < item.Quantity)
+                    {
+                        TempData["Error"] = $"No hay stock suficiente para {item.Name}";
+                        return RedirectToAction("Index", "Cart", new { area = "Cliente" });
+                    }
+                }
+
+                var total = cart.Sum(i => i.Price * i.Quantity);
+
+                var order = new Order
+                {
+                    UserId = userId,
+                    Total = total,
+                    Status = "Pendiente",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Orders.Add(order);
+                await _context.SaveChangesAsync();
+
+                foreach (var item in cart)
+                {
+                    _context.OrderItems.Add(new OrderItem
+                    {
+                        OrderId = order.Id,
+                        ProductId = item.ProductId,
+                        Quantity = item.Quantity,
+                        Price = item.Price
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+
+                var initPoint = await _mercadoPagoService.CrearPago(order.Total, order.Id);
+                return Redirect(initPoint);
             }
-
-            await _context.SaveChangesAsync();
-
-            var initPoint = await _mercadoPagoService.CrearPago(order.Total, order.Id);
-            return Redirect(initPoint);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al confirmar el checkout");
+                TempData["Error"] = "Ocurrió un error procesando su orden. Intente nuevamente.";
+                return RedirectToAction("Index", "Cart", new { area = "Cliente" });
+            }
         }
 
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> Success(string payment_id, string status, string external_reference)
         {
-            Order? order = null;
-
-            if (!string.IsNullOrEmpty(external_reference) &&
-                int.TryParse(external_reference, out int orderId))
+            try
             {
-                order = await _context.Orders
+                if (string.IsNullOrEmpty(external_reference) || !int.TryParse(external_reference, out int orderId))
+                    return RedirectToAction("Index", "Home", new { area = "" });
+
+                var order = await _context.Orders
                     .Include(o => o.OrderItems)
                         .ThenInclude(oi => oi.Product)
                     .FirstOrDefaultAsync(o => o.Id == orderId);
 
+                if (order == null)
+                    return RedirectToAction("Index", "Home", new { area = "" });
+
                 HttpContext.Session.Remove("CART");
 
-                if (order != null && order.Status == "Pendiente")
+                if (order.Status == "Pendiente")
                 {
                     order.Status = "Procesando";
                     await _context.SaveChangesAsync();
 
-                    // ENVÍO DE EMAIL (USANDO CONTRATOS REALES)
                     var userEmail = await _context.Users
                         .Where(u => u.Id == order.UserId)
                         .Select(u => u.Email)
@@ -128,54 +151,81 @@ namespace EcommerceApp.Areas.Cliente.Controllers
 
                     if (!string.IsNullOrEmpty(userEmail))
                     {
-                        var template = await _emailTemplateService.LoadAsync("OrderSuccess.html");
+                        try
+                        {
+                            var template = await _emailTemplateService.LoadAsync("OrderSuccess.html");
+                            var body = template
+                                .Replace("{{ORDER_ID}}", order.Id.ToString())
+                                .Replace("{{TOTAL}}", order.Total.ToString("C"));
 
-                        var body = template
-                            .Replace("{{ORDER_ID}}", order.Id.ToString())
-                            .Replace("{{TOTAL}}", order.Total.ToString("C"));
-
-                        await _emailService.SendOrderConfirmationEmail(order);
+                            await _emailService.SendOrderConfirmationEmail(order);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, $"Error enviando email de confirmación para Order {order.Id}");
+                        }
                     }
                 }
-            }
 
-            return View(order);
+                return View(order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en la página de Success del checkout");
+                return StatusCode(500, "Ocurrió un error procesando la orden.");
+            }
         }
 
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> Pending(string external_reference)
         {
-            if (!string.IsNullOrEmpty(external_reference) &&
-                int.TryParse(external_reference, out int orderId))
+            try
             {
-                var order = await _context.Orders.FindAsync(orderId);
-                if (order != null)
+                if (!string.IsNullOrEmpty(external_reference) &&
+                    int.TryParse(external_reference, out int orderId))
                 {
-                    order.Status = "Pendiente";
-                    await _context.SaveChangesAsync();
+                    var order = await _context.Orders.FindAsync(orderId);
+                    if (order != null)
+                    {
+                        order.Status = "Pendiente";
+                        await _context.SaveChangesAsync();
+                    }
                 }
-            }
 
-            return View();
+                return View();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en la página Pending del checkout");
+                return StatusCode(500, "Ocurrió un error procesando la orden.");
+            }
         }
 
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> Failure(string external_reference)
         {
-            if (!string.IsNullOrEmpty(external_reference) &&
-                int.TryParse(external_reference, out int orderId))
+            try
             {
-                var order = await _context.Orders.FindAsync(orderId);
-                if (order != null)
+                if (!string.IsNullOrEmpty(external_reference) &&
+                    int.TryParse(external_reference, out int orderId))
                 {
-                    order.Status = "Rechazado";
-                    await _context.SaveChangesAsync();
+                    var order = await _context.Orders.FindAsync(orderId);
+                    if (order != null)
+                    {
+                        order.Status = "Rechazado";
+                        await _context.SaveChangesAsync();
+                    }
                 }
-            }
 
-            return View();
+                return View();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en la página Failure del checkout");
+                return StatusCode(500, "Ocurrió un error procesando la orden.");
+            }
         }
     }
 }
