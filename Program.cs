@@ -11,8 +11,14 @@ using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ✅ AJUSTE CLAVE
+// ✅ VARIABLES DE ENTORNO
 builder.Configuration.AddEnvironmentVariables();
+
+// ✅ AJUSTE CRÍTICO PARA RENDER
+if (!builder.Environment.IsDevelopment())
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{Environment.GetEnvironmentVariable("PORT")}");
+}
 
 // =======================
 // SERVICIOS BASE
@@ -38,7 +44,6 @@ builder.Services.AddRazorPages(options =>
 // =======================
 builder.Services.AddScoped<PasswordService>();
 
-// 🔹 EMAIL (CORRECTO)
 builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
@@ -46,7 +51,7 @@ builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
 builder.Services.AddScoped<MercadoPagoService>();
 
 // =======================
-// CONFIGURACIÓN DE POSTGRESQL
+// POSTGRESQL
 // =======================
 var connectionString = builder.Environment.IsDevelopment()
     ? builder.Configuration.GetConnectionString("DefaultConnection")
@@ -63,7 +68,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 });
 
 // =======================
-// IDENTITY, SESSION & COOKIES
+// IDENTITY & SESSION
 // =======================
 builder.Services.AddDistributedMemoryCache();
 
@@ -89,7 +94,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 
 // =======================
-// CONSTRUCCIÓN DE LA APP
+// APP
 // =======================
 var app = builder.Build();
 
@@ -132,32 +137,17 @@ app.Use(async (context, next) =>
 });
 
 // =======================
-// MANTENIMIENTO AUTOMÁTICO
-// ⚠️ SOLO EN DESARROLLO
+// MIGRATIONS SOLO DEV
 // =======================
 if (app.Environment.IsDevelopment())
 {
-    using (var scope = app.Services.CreateScope())
-    {
-        var services = scope.ServiceProvider;
-        var context = services.GetRequiredService<ApplicationDbContext>();
-        var logger = services.GetRequiredService<ILogger<Program>>();
-
-        try
-        {
-            await context.Database.MigrateAsync();
-            await RoleSeeder.SeedRolesAsync(services);
-            await SeedAdminUser.CreateAsync(services);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error durante la inicialización automática.");
-        }
-    }
+    using var scope = app.Services.CreateScope();
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await context.Database.MigrateAsync();
 }
 
 // =======================
-// RUTAS Y LANZAMIENTO
+// RUTAS
 // =======================
 app.MapControllers();
 
@@ -170,8 +160,5 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.MapRazorPages();
-
-var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
-app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
