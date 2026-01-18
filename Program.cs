@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ✅ AJUSTE CLAVE (NO SE BORRA NADA)
+// ✅ AJUSTE CLAVE
 builder.Configuration.AddEnvironmentVariables();
 
 // =======================
@@ -38,12 +38,10 @@ builder.Services.AddRazorPages(options =>
 // =======================
 builder.Services.AddScoped<PasswordService>();
 
-// 🔹 EMAIL (SE CONSERVA TODO)
+// 🔹 EMAIL (CORRECTO)
 builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
-builder.Services.AddScoped<EmailService>();
-builder.Services.AddScoped<EmailTemplateService>();
 
 builder.Services.AddScoped<MercadoPagoService>();
 
@@ -144,13 +142,9 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
-        logger.LogInformation("Verificando actualizaciones de base de datos...");
         await context.Database.MigrateAsync();
-
         await RoleSeeder.SeedRolesAsync(services);
         await SeedAdminUser.CreateAsync(services);
-
-        logger.LogInformation("Sistema de base de datos listo.");
     }
     catch (Exception ex)
     {
@@ -162,15 +156,12 @@ using (var scope = app.Services.CreateScope())
 // RUTAS Y LANZAMIENTO
 // =======================
 app.MapControllers();
-
 app.MapControllerRoute(
     name: "areas",
     pattern: "{area:exists}/{controller=Products}/{action=Index}/{id?}");
-
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
-
 app.MapRazorPages();
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
