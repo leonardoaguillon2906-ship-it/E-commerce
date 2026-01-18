@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using EcommerceApp.Services; // ✅ Asegúrate de tener este using
 
 namespace EcommerceApp.Areas.Cliente.Controllers
 {
@@ -19,11 +20,17 @@ namespace EcommerceApp.Areas.Cliente.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly MercadoPagoService _mercadoPagoService;
+        private readonly IEmailService _emailService; // ✅ Campo agregado
 
-        public CheckoutController(ApplicationDbContext context, MercadoPagoService mercadoPagoService)
+        // ✅ Constructor modificado para incluir el servicio de email
+        public CheckoutController(
+            ApplicationDbContext context, 
+            MercadoPagoService mercadoPagoService, 
+            IEmailService emailService)
         {
             _context = context;
             _mercadoPagoService = mercadoPagoService;
+            _emailService = emailService;
         }
 
         [HttpGet]
@@ -101,8 +108,9 @@ namespace EcommerceApp.Areas.Cliente.Controllers
             if (!string.IsNullOrEmpty(external_reference) &&
                 int.TryParse(external_reference, out int orderId))
             {
-                // Cargar la orden con sus productos
+                // ✅ CARGA CRÍTICA: Se agregó .Include(o => o.User) para obtener el email del comprador
                 order = await _context.Orders
+                    .Include(o => o.User) 
                     .Include(o => o.OrderItems)
                         .ThenInclude(oi => oi.Product)
                     .FirstOrDefaultAsync(o => o.Id == orderId);
@@ -113,12 +121,23 @@ namespace EcommerceApp.Areas.Cliente.Controllers
                 // Solo marcar como Procesando si está pendiente
                 if (order != null && order.Status == "Pendiente")
                 {
-                    order.Status = "Procesando"; // El stock se descuenta en webhook
+                    order.Status = "Procesando"; 
                     await _context.SaveChangesAsync();
+
+                    // ✅ ENVÍO DE EMAIL: Se ejecuta aquí para asegurar que el pago fue exitoso
+                    try 
+                    {
+                        await _emailService.SendOrderConfirmationEmail(order);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Registramos el error en consola para no romper la experiencia del usuario
+                        Console.WriteLine($"Error enviando email: {ex.Message}");
+                    }
                 }
             }
 
-            return View(order); // Pasamos la orden completa a la vista
+            return View(order); 
         }
 
         [HttpGet]

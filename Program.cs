@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
-// AGREGADOS PARA SOPORTE DE IMÁGENES
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Http.Features;
 
@@ -20,7 +19,6 @@ builder.Services.AddControllersWithViews()
 
 builder.Services.AddControllers();
 
-// ✅ AGREGADO: Aumentar límite de carga para archivos de imagen pesados
 builder.Services.Configure<FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
@@ -35,8 +33,12 @@ builder.Services.AddRazorPages(options =>
 // SERVICIOS PERSONALIZADOS
 // =======================
 builder.Services.AddScoped<PasswordService>();
-builder.Services.AddScoped<IEmailSender, EmailService>();
-builder.Services.AddScoped<EmailService>();
+
+// ✅ CORRECCIÓN CRÍTICA: Registro de los tres tipos de acceso al servicio de email
+builder.Services.AddScoped<IEmailSender, EmailService>(); // Para Identity
+ // ✅ ESTA ES LA QUE PIDE TU CHECKOUTCONTROLLER
+builder.Services.AddScoped<EmailService>();               // Para uso directo
+
 builder.Services.AddScoped<EmailTemplateService>();
 builder.Services.AddScoped<MercadoPagoService>();
 
@@ -95,7 +97,6 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// ✅ MODIFICADO: Configuración de tipos de archivo para AVIF y WebP
 var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".avif"] = "image/avif";
 provider.Mappings[".webp"] = "image/webp";
@@ -120,7 +121,7 @@ app.Use(async (context, next) =>
 });
 
 // ============================================================
-// BLOQUE DE MANTENIMIENTO AUTOMÁTICO (SEGURO PARA DATOS)
+// BLOQUE DE MANTENIMIENTO AUTOMÁTICO
 // ============================================================
 using (var scope = app.Services.CreateScope())
 {
@@ -153,7 +154,6 @@ app.MapControllerRoute(name: "default", pattern: "{controller=Home}/{action=Inde
 app.MapRazorPages();
 
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
-// ✅ IMPORTANTE: Se ajusta para que Render escuche correctamente
 app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
