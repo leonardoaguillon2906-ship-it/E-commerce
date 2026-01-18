@@ -54,7 +54,15 @@ namespace EcommerceApp.Services
             if (string.IsNullOrEmpty(userEmail))
                 return;
 
-            string body = _emailTemplateService.GetOrderSuccessTemplate(order);
+            // ✅ CARGA CORRECTA DEL TEMPLATE
+            var template = await _emailTemplateService.LoadAsync("OrderSuccess.html");
+
+            // ✅ REEMPLAZO DE VARIABLES
+            var body = template
+                .Replace("{{ORDER_ID}}", order.Id.ToString())
+                .Replace("{{TOTAL}}", order.Total.ToString("C"))
+                .Replace("{{STATUS}}", order.Status)
+                .Replace("{{DATE}}", order.CreatedAt.ToString("dd/MM/yyyy"));
 
             await EnviarCorreoAsync(
                 userEmail,
