@@ -6,24 +6,24 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
+// AGREGADOS PARA SOPORTE DE IMÁGENES
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ============================================================
-// 1. SERVICIOS BASE Y CONFIGURACIÓN DE FORMULARIOS
-// ============================================================
+// =======================
+// SERVICIOS BASE
+// =======================
 builder.Services.AddControllersWithViews()
-    .AddJsonOptions(options => {
-        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-    });
+    .AddJsonOptions(options => options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles);
 
 builder.Services.AddControllers();
 
+// ✅ AGREGADO: Aumentar límite de carga para archivos de imagen pesados
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB para imágenes
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
 });
 
 builder.Services.AddRazorPages(options =>
@@ -31,23 +31,18 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeAreaFolder("Identity", "/");
 });
 
-// ============================================================
-// 2. INYECCIÓN DE DEPENDENCIAS (SERVICIOS PERSONALIZADOS)
-// ============================================================
+// =======================
+// SERVICIOS PERSONALIZADOS
+// =======================
 builder.Services.AddScoped<PasswordService>();
-
-// ✅ REGISTRO TRIPLE DE EMAIL: Soluciona el error 500 y errores de compilación
-// Esto vincula la clase EmailService con las dos interfaces que utiliza tu app
-builder.Services.AddScoped<IEmailSender, EmailService>();   // Requerido por ASP.NET Identity
-builder.Services.AddScoped<IEmailService, EmailService>();  // Requerido por CheckoutController
-builder.Services.AddScoped<EmailService>();                 // Acceso directo a la clase
-
+builder.Services.AddScoped<IEmailSender, EmailService>();
+builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<EmailTemplateService>();
 builder.Services.AddScoped<MercadoPagoService>();
 
-// ============================================================
-// 3. CONFIGURACIÓN DE BASE DE DATOS (POSTGRESQL)
-// ============================================================
+// =======================
+// CONFIGURACIÓN DE POSTGRESQL
+// =======================
 var connectionString = builder.Environment.IsDevelopment()
     ? builder.Configuration.GetConnectionString("DefaultConnection") 
     : $"Host={Environment.GetEnvironmentVariable("DATABASE_HOST")};" +
@@ -62,9 +57,9 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString);
 });
 
-// ============================================================
-// 4. IDENTITY, SESIONES Y COOKIES
-// ============================================================
+// =======================
+// IDENTITY, SESSION & COOKIES
+// =======================
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
@@ -87,9 +82,9 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.AccessDeniedPath = "/Account/AccessDenied";
 });
 
-// ============================================================
-// 5. CONSTRUCCIÓN Y MIDDLEWARES
-// ============================================================
+// =======================
+// CONSTRUCCIÓN DE LA APP
+// =======================
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
@@ -100,7 +95,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// Soporte para formatos de imagen modernos
+// ✅ MODIFICADO: Configuración de tipos de archivo para AVIF y WebP
 var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".avif"] = "image/avif";
 provider.Mappings[".webp"] = "image/webp";
@@ -115,7 +110,7 @@ app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Redirecciones manuales para rutas de Identity
+// Redirecciones Identity
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value?.ToLower();
@@ -125,7 +120,7 @@ app.Use(async (context, next) =>
 });
 
 // ============================================================
-// 6. MANTENIMIENTO AUTOMÁTICO (MIGRACIONES Y SEEDERS)
+// BLOQUE DE MANTENIMIENTO AUTOMÁTICO (SEGURO PARA DATOS)
 // ============================================================
 using (var scope = app.Services.CreateScope())
 {
@@ -149,16 +144,16 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// ============================================================
-// 7. CONFIGURACIÓN DE RUTAS Y PUERTO (RENDER)
-// ============================================================
+// =======================
+// RUTAS Y LANZAMIENTO
+// =======================
 app.MapControllers();
 app.MapControllerRoute(name: "areas", pattern: "{area:exists}/{controller=Products}/{action=Index}/{id?}");
 app.MapControllerRoute(name: "default", pattern: "{controller=Home}/{action=Index}/{id?}");
 app.MapRazorPages();
 
-// Configuración de puerto dinámica para el despliegue en la nube
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+// ✅ IMPORTANTE: Se ajusta para que Render escuche correctamente
 app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
