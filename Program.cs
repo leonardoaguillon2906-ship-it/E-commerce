@@ -11,14 +11,10 @@ using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ✅ VARIABLES DE ENTORNO
+// =======================
+// VARIABLES DE ENTORNO
+// =======================
 builder.Configuration.AddEnvironmentVariables();
-
-// ✅ AJUSTE CRÍTICO PARA RENDER
-if (!builder.Environment.IsDevelopment())
-{
-    builder.WebHost.UseUrls($"http://0.0.0.0:{Environment.GetEnvironmentVariable("PORT")}");
-}
 
 // =======================
 // SERVICIOS BASE
@@ -160,5 +156,11 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.MapRazorPages();
+
+// =======================
+// PUERTO PARA RENDER
+// =======================
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
