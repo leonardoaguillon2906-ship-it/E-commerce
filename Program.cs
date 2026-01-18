@@ -11,6 +11,9 @@ using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ✅ AJUSTE CLAVE (NO SE BORRA NADA)
+builder.Configuration.AddEnvironmentVariables();
+
 // =======================
 // SERVICIOS BASE
 // =======================
@@ -35,7 +38,7 @@ builder.Services.AddRazorPages(options =>
 // =======================
 builder.Services.AddScoped<PasswordService>();
 
-// 🔹 EMAIL (CONFIGURACIÓN CORRECTA Y COMPLETA)
+// 🔹 EMAIL (SE CONSERVA TODO)
 builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
