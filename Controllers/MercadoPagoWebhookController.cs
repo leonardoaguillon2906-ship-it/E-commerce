@@ -6,12 +6,14 @@ using MercadoPago.Resource.Payment;
 using MercadoPago.Resource.MerchantOrder;
 using MercadoPago.Client.Payment;
 using MercadoPago.Client.MerchantOrder;
+using MercadoPago.Config;
 using System.Text.Json;
 
 namespace EcommerceApp.Controllers
 {
     [ApiController]
-    [Route("api/mercadopago")]
+    // ✅ RUTA SIMPLIFICADA: Evita el prefijo /api/ para reducir errores 404 en el Webhook
+    [Route("mercadopago")] 
     public class MercadoPagoWebhookController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -26,50 +28,44 @@ namespace EcommerceApp.Controllers
             _context = context;
             _emailService = emailService;
             _templateService = templateService;
+
+            // ✅ CONFIGURACIÓN DE TOKEN: Sincroniza con la variable 'MERCADOPAGO_ACCESS_TOKEN' de Render
+            var accessToken = Environment.GetEnvironmentVariable("MERCADOPAGO_ACCESS_TOKEN");
+            if (!string.IsNullOrEmpty(accessToken))
+            {
+                MercadoPagoConfig.AccessToken = accessToken;
+            }
         }
 
         [HttpPost("webhook")]
         public async Task<IActionResult> Receive()
         {
+            // Captura del cuerpo de la notificación
             string body;
-
             using (var reader = new StreamReader(Request.Body))
             {
                 body = await reader.ReadToEndAsync();
             }
 
-            if (string.IsNullOrWhiteSpace(body))
-            {
-                Console.WriteLine("[Webhook] Body vacío");
-                return Ok();
-            }
+            if (string.IsNullOrWhiteSpace(body)) return Ok();
 
             JsonElement payload;
-
             try
             {
                 payload = JsonDocument.Parse(body).RootElement;
             }
             catch
             {
-                Console.WriteLine("[Webhook] JSON inválido");
-                return Ok();
+                return Ok(); // Retornamos 200 para que MP no reintente payloads corruptos
             }
 
-            if (!payload.TryGetProperty("type", out var typeProp))
-            {
-                Console.WriteLine("[Webhook] Sin type");
-                return Ok();
-            }
+            // Validar que el payload contenga un tipo de evento
+            if (!payload.TryGetProperty("type", out var typeProp)) return Ok();
 
             var type = typeProp.GetString();
-            Console.WriteLine($"[Webhook] Tipo: {type}");
-
             long paymentId = 0;
 
-            // ============================
-            // EVENTO PAYMENT
-            // ============================
+            // 1. OBTENER EL ID DEL PAGO (Soporta eventos 'payment' y 'merchant_order')
             if (type == "payment")
             {
                 if (payload.TryGetProperty("data", out var dataProp) &&
@@ -77,184 +73,109 @@ namespace EcommerceApp.Controllers
                 {
                     paymentId = ReadLong(idProp);
                 }
-                else
-                {
-                    Console.WriteLine("[Webhook] Sin data.id en payment");
-                    return Ok();
-                }
             }
-            // ============================
-            // EVENTO MERCHANT ORDER
-            // ============================
             else if (type == "merchant_order" || type == "topic_merchant_order_wh")
             {
                 long merchantOrderId = 0;
-
-                if (payload.TryGetProperty("data", out var dataProp) &&
-                    dataProp.TryGetProperty("id", out var moIdProp))
-                {
+                if (payload.TryGetProperty("data", out var dataProp) && dataProp.TryGetProperty("id", out var moIdProp))
                     merchantOrderId = ReadLong(moIdProp);
-                }
                 else if (payload.TryGetProperty("resource", out var resourceProp))
-                {
                     merchantOrderId = ReadLong(resourceProp);
-                }
                 else if (payload.TryGetProperty("id", out var rootIdProp))
-                {
                     merchantOrderId = ReadLong(rootIdProp);
-                }
 
-                if (merchantOrderId == 0)
+                if (merchantOrderId > 0)
                 {
-                    Console.WriteLine("[Webhook] No se pudo obtener merchant_order id");
-                    return Ok();
+                    var moClient = new MerchantOrderClient();
+                    var merchantOrder = await moClient.GetAsync(merchantOrderId);
+                    var approvedPayment = merchantOrder.Payments?.FirstOrDefault(p => p.Status == "approved");
+                    if (approvedPayment != null) paymentId = approvedPayment.Id ?? 0;
                 }
-
-                Console.WriteLine($"[Webhook] MerchantOrderId: {merchantOrderId}");
-
-                var moClient = new MerchantOrderClient();
-                MerchantOrder merchantOrder;
-
-                try
-                {
-                    merchantOrder = await moClient.GetAsync(merchantOrderId);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[Webhook] Error consultando merchant order: {ex.Message}");
-                    return Ok();
-                }
-
-                var approvedPayment = merchantOrder.Payments?
-                    .FirstOrDefault(p => p.Status == "approved");
-
-                if (approvedPayment == null || !approvedPayment.Id.HasValue)
-                {
-                    Console.WriteLine("[Webhook] Sin pagos aprobados en merchant order");
-                    return Ok();
-                }
-
-                paymentId = approvedPayment.Id.Value;
-            }
-            else
-            {
-                Console.WriteLine($"[Webhook] Tipo ignorado: {type}");
-                return Ok();
             }
 
-            Console.WriteLine($"[Webhook] PaymentId: {paymentId}");
+            if (paymentId == 0) return Ok();
 
-            // ============================
-            // CONSULTAR PAGO
-            // ============================
+            // 2. CONSULTAR EL ESTADO REAL EN MERCADO PAGO
             var paymentClient = new PaymentClient();
             Payment payment;
-
             try
             {
                 payment = await paymentClient.GetAsync(paymentId);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Webhook] Error consultando pago: {ex.Message}");
+                Console.WriteLine($"[Webhook Error MP API] {ex.Message}");
                 return Ok();
             }
 
-            Console.WriteLine($"[Webhook] Estado pago: {payment.Status}");
-
-            if (payment.Status != "approved")
-                return Ok();
+            // 3. VALIDACIÓN DE ESTADO Y REFERENCIA
+            if (payment.Status != "approved") return Ok();
 
             if (string.IsNullOrEmpty(payment.ExternalReference) ||
                 !int.TryParse(payment.ExternalReference, out int orderId))
             {
-                Console.WriteLine($"[Webhook] ExternalReference inválido: {payment.ExternalReference}");
                 return Ok();
             }
 
-            Console.WriteLine($"[Webhook] OrderId: {orderId}");
-
-            // ============================
-            // ACTUALIZAR ORDEN Y STOCK
-            // ============================
+            // 4. ACTUALIZACIÓN DE BASE DE DATOS (Atomicidad)
             var order = await _context.Orders
                 .Include(o => o.User)
                 .Include(o => o.OrderItems)
                     .ThenInclude(oi => oi.Product)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
-            if (order == null)
-            {
-                Console.WriteLine($"[Webhook] Orden no encontrada: {orderId}");
-                return Ok();
-            }
+            // Si la orden no existe o ya fue pagada, terminamos con éxito
+            if (order == null || order.Status == "Pagado") return Ok();
 
-            if (order.Status == "Pagado")
-            {
-                Console.WriteLine("[Webhook] Orden ya procesada");
-                return Ok();
-            }
-
+            // Descuento de Stock seguro
             foreach (var item in order.OrderItems)
             {
-                if (item.Product != null)
+                var product = await _context.Products.FindAsync(item.ProductId);
+                if (product != null)
                 {
-                    item.Product.Stock -= item.Quantity;
-                    if (item.Product.Stock < 0)
-                        item.Product.Stock = 0;
-
-                    _context.Products.Update(item.Product);
+                    // Evitamos que el stock sea menor a cero
+                    product.Stock = Math.Max(0, product.Stock - item.Quantity);
+                    _context.Products.Update(product);
                 }
             }
 
             order.Status = "Pagado";
             _context.Orders.Update(order);
-
             await _context.SaveChangesAsync();
-            Console.WriteLine($"[Webhook] Orden {order.Id} procesada correctamente");
 
-            // ============================
-            // ENVÍO DE CORREO (PLANTILLA)
-            // ============================
+            // 5. NOTIFICACIÓN AL CLIENTE (Email)
             if (order.User != null && !string.IsNullOrEmpty(order.User.Email))
             {
-                var template = await _templateService.LoadAsync("OrderPaid.html");
+                try 
+                {
+                    var template = await _templateService.LoadAsync("OrderPaid.html");
+                    var itemsHtml = string.Join("", order.OrderItems.Select(i =>
+                        $"<li>{i.Product?.Name} (x{i.Quantity}) - ${i.Price:N0}</li>"));
 
-                var itemsHtml = string.Join("", order.OrderItems.Select(i =>
-                    $"<li>{i.Product.Name} x{i.Quantity}</li>"
-                ));
+                    var bodyHtml = template
+                        .Replace("{{CustomerName}}", order.User.Email)
+                        .Replace("{{OrderId}}", order.Id.ToString())
+                        .Replace("{{OrderItems}}", itemsHtml)
+                        .Replace("{{Total}}", order.Total.ToString("N0"))
+                        .Replace("{{Year}}", DateTime.UtcNow.Year.ToString());
 
-                var bodyHtml = template
-                    .Replace("{{CustomerName}}", order.User.Email)
-                    .Replace("{{OrderId}}", order.Id.ToString())
-                    .Replace("{{OrderItems}}", itemsHtml)
-                    .Replace("{{Total}}", order.Total.ToString("N0"))
-                    .Replace("{{Year}}", DateTime.UtcNow.Year.ToString());
-
-                await _emailService.SendAsync(
-                    order.User.Email,
-                    $"Confirmación de pago - Orden #{order.Id}",
-                    bodyHtml
-                );
-
-                Console.WriteLine("[Webhook] Correo enviado correctamente");
+                    await _emailService.SendAsync(order.User.Email, $"¡Pago Confirmado! Orden #{order.Id}", bodyHtml);
+                    Console.WriteLine($"[Webhook Success] Email enviado a {order.User.Email}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Webhook Email Error] {ex.Message}");
+                }
             }
 
-            return Ok();
+            return Ok(); // Notificamos a MP que recibimos el mensaje correctamente
         }
 
         private long ReadLong(JsonElement el)
         {
-            try
-            {
-                return el.ValueKind == JsonValueKind.Number
-                    ? el.GetInt64()
-                    : long.Parse(el.GetString());
-            }
-            catch
-            {
-                return 0;
-            }
+            try {
+                return el.ValueKind == JsonValueKind.Number ? el.GetInt64() : long.Parse(el.GetString() ?? "0");
+            } catch { return 0; }
         }
     }
 }
