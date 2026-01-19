@@ -17,15 +17,22 @@ namespace EcommerceApp.Services.Payments
             _configuration = configuration;
 
             // Prioriza la variable de entorno de Render, si no existe, usa appsettings.json
+            // El AccessToken debe ser el del VENDEDOR (tu cuenta de desarrollador)
             MercadoPagoConfig.AccessToken = Environment.GetEnvironmentVariable("MERCADOPAGO_ACCESS_TOKEN") 
                 ?? _configuration["PaymentProviders:MercadoPago:AccessToken"];
         }
 
-        public async Task<string> CrearPago(decimal total, int orderId)
+        /// <summary>
+        /// Crea una preferencia de pago dinámica.
+        /// </summary>
+        /// <param name="total">Monto total de la orden</param>
+        /// <param name="orderId">ID de la orden en tu base de datos</param>
+        /// <param name="emailComprador">Email del usuario de prueba que está comprando</param>
+        public async Task<string> CrearPago(decimal total, int orderId, string emailComprador)
         {
             var client = new PreferenceClient();
 
-            // ✅ DETECCIÓN AUTOMÁTICA DE URL BASE (Se mantiene igual)
+            // ✅ DETECCIÓN AUTOMÁTICA DE URL BASE
             string baseUrl = Environment.GetEnvironmentVariable("RENDER_EXTERNAL_URL") 
                 ?? "https://spectrohelioscopic-porpoiselike-wilber.ngrok-free.dev"; 
 
@@ -44,18 +51,18 @@ namespace EcommerceApp.Services.Payments
             {
                 Items = items,
 
-                // ✅ MEJORA DEL PAGADOR: Agregamos nombre y apellido para que el filtro de seguridad lo valide mejor
+                // ✅ PAGADOR DINÁMICO: 
+                // Usamos el email que llega por parámetro (el del usuario logueado)
                 Payer = new PreferencePayerRequest
                 {
-                    Email = "test_user_1305459341@testuser.com", // Asegúrate de NO usar tu correo de cuenta real de Mercado Pago
+                    Email = emailComprador, 
                     Name = "Usuario",
-                    Surname = "De Prueba"
+                    Surname = "Prueba"
                 },
 
-                // ✅ WEBHOOK DINÁMICO
+                // ✅ WEBHOOK Y BACKURLS
                 NotificationUrl = $"{baseUrl}/Cliente/Checkout/Webhook",
 
-                // ✅ BACKURLS DINÁMICAS
                 BackUrls = new PreferenceBackUrlsRequest
                 {
                     Success = $"{baseUrl}/Cliente/Checkout/Success",
@@ -63,23 +70,32 @@ namespace EcommerceApp.Services.Payments
                     Pending = $"{baseUrl}/Cliente/Checkout/Pending"
                 },
 
-                // ✅ CONFIGURACIONES CRÍTICAS PARA SANDBOX
+                // ✅ CONFIGURACIONES DE FLUJO
                 AutoReturn = "approved",
                 
-                // Cambiamos BinaryMode a false temporalmente si el error persiste, 
-                // ya que true obliga a un resultado inmediato que a veces falla en Sandbox.
+                // Mantenemos BinaryMode en false para evitar rechazos automáticos por riesgo en Sandbox
                 BinaryMode = false, 
                 
                 ExternalReference = orderId.ToString(),
 
-                // ✅ AGREGAMOS TRACKS DE SEGURIDAD (Opcional pero recomendado para evitar rechazos)
-                StatementDescriptor = "MI TIENDA ECOMMERCE"
+                StatementDescriptor = "MI TIENDA ECOMMERCE",
+
+                // ✅ OPCIONAL: Restringir a tarjetas para asegurar éxito en Sandbox
+                PaymentMethods = new PreferencePaymentMethodsRequest
+                {
+                    ExcludedPaymentTypes = new List<PreferencePaymentTypeRequest>
+                    {
+                        new PreferencePaymentTypeRequest { Id = "ticket" }, // Excluye Efecty/Bancos
+                        new PreferencePaymentTypeRequest { Id = "atm" }
+                    },
+                    Installments = 1 
+                }
             };
 
-            // Creamos la preferencia
+            // Ejecuta la petición a Mercado Pago
             var result = await client.CreateAsync(preference);
 
-            // Importante: SandboxInitPoint es el correcto para pruebas.
+            // Importante: Retornamos SandboxInitPoint para el entorno de pruebas
             return result.SandboxInitPoint; 
         }
     }

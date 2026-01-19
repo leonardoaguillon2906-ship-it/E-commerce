@@ -47,6 +47,9 @@ namespace EcommerceApp.Areas.Cliente.Controllers
                 return RedirectToAction("Index", "Cart", new { area = "Cliente" });
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            // ✅ Capturamos el email del usuario autenticado para el Payer de Mercado Pago
+            var userEmail = User.FindFirstValue(ClaimTypes.Email);
+
             if (string.IsNullOrEmpty(userId))
                 return RedirectToAction("Login", "Account");
 
@@ -87,8 +90,11 @@ namespace EcommerceApp.Areas.Cliente.Controllers
 
             await _context.SaveChangesAsync();
 
-            // Obtenemos el punto de inicio (Asegúrate que el servicio retorne SandboxInitPoint en test)
-            var initPoint = await _mercadoPagoService.CrearPago(order.Total, order.Id);
+            // ✅ Ajuste: Enviamos el email del comprador al servicio de Mercado Pago
+            // Si el email es nulo (por configuración de Claims), enviamos el de prueba que creaste
+            var compradorEmail = userEmail ?? "TESTUSER2412529260038779833";
+            
+            var initPoint = await _mercadoPagoService.CrearPago(order.Total, order.Id, compradorEmail);
 
             if (string.IsNullOrEmpty(initPoint))
             {
