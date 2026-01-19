@@ -4,7 +4,7 @@ using MercadoPago.Resource.Preference;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System; 
+using System;
 
 namespace EcommerceApp.Services.Payments
 {
@@ -25,7 +25,7 @@ namespace EcommerceApp.Services.Payments
         {
             var client = new PreferenceClient();
 
-            // ✅ DETECCIÓN AUTOMÁTICA DE URL BASE
+            // ✅ DETECCIÓN AUTOMÁTICA DE URL BASE (Se mantiene igual)
             string baseUrl = Environment.GetEnvironmentVariable("RENDER_EXTERNAL_URL") 
                 ?? "https://spectrohelioscopic-porpoiselike-wilber.ngrok-free.dev"; 
 
@@ -44,11 +44,12 @@ namespace EcommerceApp.Services.Payments
             {
                 Items = items,
 
-                // ✅ AGREGAR PAGADOR DE PRUEBA
-                // Esto evita que el sistema sospeche de fraude al intentar usar tu propia cuenta de desarrollador
+                // ✅ MEJORA DEL PAGADOR: Agregamos nombre y apellido para que el filtro de seguridad lo valide mejor
                 Payer = new PreferencePayerRequest
                 {
-                    Email = "test_user_123456@testuser.com" 
+                    Email = "test_user_1305459341@testuser.com", // Asegúrate de NO usar tu correo de cuenta real de Mercado Pago
+                    Name = "Usuario",
+                    Surname = "De Prueba"
                 },
 
                 // ✅ WEBHOOK DINÁMICO
@@ -64,13 +65,21 @@ namespace EcommerceApp.Services.Payments
 
                 // ✅ CONFIGURACIONES CRÍTICAS PARA SANDBOX
                 AutoReturn = "approved",
-                BinaryMode = true, // Fuerza a que el resultado sea solo 'approved' o 'rejected'
-                ExternalReference = orderId.ToString()
+                
+                // Cambiamos BinaryMode a false temporalmente si el error persiste, 
+                // ya que true obliga a un resultado inmediato que a veces falla en Sandbox.
+                BinaryMode = false, 
+                
+                ExternalReference = orderId.ToString(),
+
+                // ✅ AGREGAMOS TRACKS DE SEGURIDAD (Opcional pero recomendado para evitar rechazos)
+                StatementDescriptor = "MI TIENDA ECOMMERCE"
             };
 
+            // Creamos la preferencia
             var result = await client.CreateAsync(preference);
 
-            // Importante: SandboxInitPoint es exclusivo para pruebas con credenciales de prueba
+            // Importante: SandboxInitPoint es el correcto para pruebas.
             return result.SandboxInitPoint; 
         }
     }

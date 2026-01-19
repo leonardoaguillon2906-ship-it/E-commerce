@@ -87,7 +87,14 @@ namespace EcommerceApp.Areas.Cliente.Controllers
 
             await _context.SaveChangesAsync();
 
+            // Obtenemos el punto de inicio (Asegúrate que el servicio retorne SandboxInitPoint en test)
             var initPoint = await _mercadoPagoService.CrearPago(order.Total, order.Id);
+
+            if (string.IsNullOrEmpty(initPoint))
+            {
+                TempData["Error"] = "Error al conectar con la pasarela de pago.";
+                return RedirectToAction("Index", "Cart");
+            }
 
             return Redirect(initPoint);
         }
@@ -101,24 +108,25 @@ namespace EcommerceApp.Areas.Cliente.Controllers
             if (!string.IsNullOrEmpty(external_reference) &&
                 int.TryParse(external_reference, out int orderId))
             {
-                // Cargar la orden con sus productos
                 order = await _context.Orders
                     .Include(o => o.OrderItems)
                         .ThenInclude(oi => oi.Product)
                     .FirstOrDefaultAsync(o => o.Id == orderId);
 
-                // Limpiar carrito
-                HttpContext.Session.Remove("CART");
-
-                // Solo marcar como Procesando si está pendiente
-                if (order != null && order.Status == "Pendiente")
+                if (order != null)
                 {
-                    order.Status = "Procesando"; // El stock se descuenta en webhook
-                    await _context.SaveChangesAsync();
+                    // Limpiar carrito solo si la orden fue encontrada
+                    HttpContext.Session.Remove("CART");
+
+                    if (order.Status == "Pendiente")
+                    {
+                        order.Status = "Procesando"; 
+                        await _context.SaveChangesAsync();
+                    }
                 }
             }
 
-            return View(order); // Pasamos la orden completa a la vista
+            return View(order); 
         }
 
         [HttpGet]
