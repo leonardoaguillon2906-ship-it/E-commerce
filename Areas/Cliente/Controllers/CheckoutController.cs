@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EcommerceApp.Areas.Cliente.Controllers
 {
@@ -19,123 +20,186 @@ namespace EcommerceApp.Areas.Cliente.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly MercadoPagoService _mercadoPagoService;
+        private readonly ILogger<CheckoutController> _logger;
 
-        public CheckoutController(ApplicationDbContext context, MercadoPagoService mercadoPagoService)
+        public CheckoutController(ApplicationDbContext context, MercadoPagoService mercadoPagoService, ILogger<CheckoutController> logger)
         {
             _context = context;
             _mercadoPagoService = mercadoPagoService;
+            _logger = logger;
         }
 
         [HttpGet]
         public IActionResult Index()
         {
-            var cart = HttpContext.Session.GetObject<List<CartItem>>("CART");
+            try
+            {
+                var cart = HttpContext.Session.GetObject<List<CartItem>>("CART");
 
-            if (cart == null || !cart.Any())
+                if (cart == null || !cart.Any())
+                    return RedirectToAction("Index", "Cart", new { area = "Cliente" });
+
+                return View(cart);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al cargar el carrito para Checkout");
+                TempData["Error"] = "Ocurrió un error al cargar el carrito.";
                 return RedirectToAction("Index", "Cart", new { area = "Cliente" });
-
-            return View(cart);
+            }
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Confirm()
         {
-            var cart = HttpContext.Session.GetObject<List<CartItem>>("CART");
-
-            if (cart == null || !cart.Any())
-                return RedirectToAction("Index", "Cart", new { area = "Cliente" });
-
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId))
-                return RedirectToAction("Login", "Account");
-
-            // Validar stock antes de crear la orden
-            foreach (var item in cart)
+            try
             {
-                var product = await _context.Products.FindAsync(item.ProductId);
-                if (product == null || product.Stock < item.Quantity)
-                {
-                    TempData["Error"] = $"No hay stock suficiente para {item.Name}";
+                var cart = HttpContext.Session.GetObject<List<CartItem>>("CART");
+
+                if (cart == null || !cart.Any())
                     return RedirectToAction("Index", "Cart", new { area = "Cliente" });
-                }
-            }
 
-            var total = cart.Sum(i => i.Price * i.Quantity);
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                    return RedirectToAction("Login", "Account");
 
-            var order = new Order
-            {
-                UserId = userId,
-                Total = total,
-                Status = "Pendiente",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Orders.Add(order);
-            await _context.SaveChangesAsync();
-
-            foreach (var item in cart)
-            {
-                _context.OrderItems.Add(new OrderItem
+                // Validar stock
+                foreach (var item in cart)
                 {
-                    OrderId = order.Id,
-                    ProductId = item.ProductId,
-                    Quantity = item.Quantity,
-                    Price = item.Price
-                });
+                    var product = await _context.Products.FindAsync(item.ProductId);
+                    if (product == null || product.Stock < item.Quantity)
+                    {
+                        TempData["Error"] = $"No hay stock suficiente para {item.Name}";
+                        return RedirectToAction("Index", "Cart", new { area = "Cliente" });
+                    }
+                }
+
+                var total = cart.Sum(i => i.Price * i.Quantity);
+
+                var order = new Order
+                {
+                    UserId = userId,
+                    Total = total,
+                    Status = "Pendiente",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Orders.Add(order);
+                await _context.SaveChangesAsync();
+
+                foreach (var item in cart)
+                {
+                    _context.OrderItems.Add(new OrderItem
+                    {
+                        OrderId = order.Id,
+                        ProductId = item.ProductId,
+                        Quantity = item.Quantity,
+                        Price = item.Price
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+
+                var initPoint = await _mercadoPagoService.CrearPago(order.Total, order.Id);
+                return Redirect(initPoint);
             }
-
-            await _context.SaveChangesAsync();
-
-            var initPoint = await _mercadoPagoService.CrearPago(order.Total, order.Id);
-
-            return Redirect(initPoint);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al confirmar el checkout");
+                TempData["Error"] = "Ocurrió un error procesando su orden. Intente nuevamente.";
+                return RedirectToAction("Index", "Cart", new { area = "Cliente" });
+            }
         }
 
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> Success(string payment_id, string status, string external_reference)
         {
+            string message = string.Empty;
             Order? order = null;
 
-            if (!string.IsNullOrEmpty(external_reference) &&
-                int.TryParse(external_reference, out int orderId))
+            try
             {
-                // Cargar la orden con sus productos
-                order = await _context.Orders
-                    .Include(o => o.OrderItems)
-                        .ThenInclude(oi => oi.Product)
-                    .FirstOrDefaultAsync(o => o.Id == orderId);
-
-                // Limpiar carrito
-                HttpContext.Session.Remove("CART");
-
-                // Solo marcar como Procesando si está pendiente
-                if (order != null && order.Status == "Pendiente")
+                if (!string.IsNullOrEmpty(external_reference) &&
+                    int.TryParse(external_reference, out int orderId))
                 {
-                    order.Status = "Procesando"; // El stock se descuenta en webhook
-                    await _context.SaveChangesAsync();
+                    order = await _context.Orders
+                        .Include(o => o.OrderItems)
+                            .ThenInclude(oi => oi.Product)
+                        .FirstOrDefaultAsync(o => o.Id == orderId);
+
+                    if (order != null)
+                    {
+                        HttpContext.Session.Remove("CART");
+
+                        switch (status?.ToLower())
+                        {
+                            case "approved":
+                                if (order.Status != "Procesando")
+                                {
+                                    order.Status = "Procesando";
+                                    await _context.SaveChangesAsync();
+                                }
+                                message = "¡Pago aprobado! Tu pedido está en proceso.";
+                                break;
+
+                            case "pending":
+                            case "in_process":
+                            case "review_manual":
+                                order.Status = "Pendiente";
+                                await _context.SaveChangesAsync();
+                                message = "Tu pago está pendiente. Te notificaremos por correo cuando se acredite.";
+                                break;
+
+                            case "rejected":
+                                order.Status = "Rechazado";
+                                await _context.SaveChangesAsync();
+                                message = "Tu pago fue rechazado. Por favor intenta nuevamente.";
+                                break;
+
+                            default:
+                                message = "Estado del pago desconocido. Contacta soporte si el problema persiste.";
+                                break;
+                        }
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error procesando Success");
+                message = "Ocurrió un error procesando tu orden.";
+            }
 
-            return View(order); // Pasamos la orden completa a la vista
+            ViewBag.Message = message;
+            return View(order);
         }
 
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> Pending(string external_reference)
         {
-            if (!string.IsNullOrEmpty(external_reference) &&
-                int.TryParse(external_reference, out int orderId))
+            string message = "Tu pago está pendiente. Te notificaremos por correo cuando se acredite.";
+            try
             {
-                var order = await _context.Orders.FindAsync(orderId);
-                if (order != null)
+                if (!string.IsNullOrEmpty(external_reference) &&
+                    int.TryParse(external_reference, out int orderId))
                 {
-                    order.Status = "Pendiente";
-                    await _context.SaveChangesAsync();
+                    var order = await _context.Orders.FindAsync(orderId);
+                    if (order != null)
+                    {
+                        order.Status = "Pendiente";
+                        await _context.SaveChangesAsync();
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error procesando Pending");
+                message = "Ocurrió un error procesando tu orden.";
+            }
 
+            ViewBag.Message = message;
             return View();
         }
 
@@ -143,17 +207,27 @@ namespace EcommerceApp.Areas.Cliente.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Failure(string external_reference)
         {
-            if (!string.IsNullOrEmpty(external_reference) &&
-                int.TryParse(external_reference, out int orderId))
+            string message = "Tu pago fue rechazado. Por favor intenta nuevamente.";
+            try
             {
-                var order = await _context.Orders.FindAsync(orderId);
-                if (order != null)
+                if (!string.IsNullOrEmpty(external_reference) &&
+                    int.TryParse(external_reference, out int orderId))
                 {
-                    order.Status = "Rechazado";
-                    await _context.SaveChangesAsync();
+                    var order = await _context.Orders.FindAsync(orderId);
+                    if (order != null)
+                    {
+                        order.Status = "Rechazado";
+                        await _context.SaveChangesAsync();
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error procesando Failure");
+                message = "Ocurrió un error procesando tu orden.";
+            }
 
+            ViewBag.Message = message;
             return View();
         }
     }
