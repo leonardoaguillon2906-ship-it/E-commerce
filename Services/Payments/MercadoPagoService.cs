@@ -16,23 +16,23 @@ namespace EcommerceApp.Services.Payments
         {
             _configuration = configuration;
 
-            // Prioriza la variable de entorno de Render, si no existe, usa appsettings.json
-            // El AccessToken debe ser el del VENDEDOR (tu cuenta de desarrollador)
+            // ✅ CRÍTICO: MercadoPagoConfig debe usar el token que empieza con "TEST-"
+            // Actualmente en tus variables de Render tienes uno de producción "APP_USR-"
             MercadoPagoConfig.AccessToken = Environment.GetEnvironmentVariable("MERCADOPAGO_ACCESS_TOKEN") 
                 ?? _configuration["PaymentProviders:MercadoPago:AccessToken"];
         }
 
         /// <summary>
-        /// Crea una preferencia de pago dinámica.
+        /// Crea una preferencia de pago optimizada para Sandbox.
         /// </summary>
         /// <param name="total">Monto total de la orden</param>
         /// <param name="orderId">ID de la orden en tu base de datos</param>
-        /// <param name="emailComprador">Email del usuario de prueba que está comprando</param>
+        /// <param name="emailComprador">Email del usuario de prueba (Comprador)</param>
         public async Task<string> CrearPago(decimal total, int orderId, string emailComprador)
         {
             var client = new PreferenceClient();
 
-            // ✅ DETECCIÓN AUTOMÁTICA DE URL BASE
+            // ✅ DETECCIÓN AUTOMÁTICA DE URL BASE PARA WEBHOOKS Y RETORNO
             string baseUrl = Environment.GetEnvironmentVariable("RENDER_EXTERNAL_URL") 
                 ?? "https://spectrohelioscopic-porpoiselike-wilber.ngrok-free.dev"; 
 
@@ -51,8 +51,8 @@ namespace EcommerceApp.Services.Payments
             {
                 Items = items,
 
-                // ✅ PAGADOR DINÁMICO
-                // Usamos el email del usuario logueado para que Mercado Pago no detecte auto-compra
+                // ✅ PAGADOR DINÁMICO: 
+                // Usamos el email del usuario de prueba (ej. el que termina en 79833)
                 Payer = new PreferencePayerRequest
                 {
                     Email = emailComprador, 
@@ -60,7 +60,7 @@ namespace EcommerceApp.Services.Payments
                     Surname = "Prueba"
                 },
 
-                // ✅ WEBHOOK Y BACKURLS
+                // ✅ CONFIGURACIÓN DE RETORNOS Y NOTIFICACIONES
                 NotificationUrl = $"{baseUrl}/Cliente/Checkout/Webhook",
 
                 BackUrls = new PreferenceBackUrlsRequest
@@ -70,35 +70,34 @@ namespace EcommerceApp.Services.Payments
                     Pending = $"{baseUrl}/Cliente/Checkout/Pending"
                 },
 
-                // ✅ CONFIGURACIONES DE FLUJO PARA EVITAR ERRORES DE SEGURIDAD
                 AutoReturn = "approved",
                 
-                // Cambiamos a BinaryMode = true para que el pago se apruebe o rechace de inmediato.
-                // Esto evita el error de "Estamos revisando tu pago".
+                // ✅ SOLUCIÓN AL ERROR "ESTAMOS REVISANDO TU PAGO":
+                // Cambiamos a 'true' para que el resultado sea inmediato (Aprobado o Rechazado).
                 BinaryMode = true, 
                 
                 ExternalReference = orderId.ToString(),
 
                 StatementDescriptor = "MI TIENDA ECOMMERCE",
 
-                // ✅ BLINDAJE DE MÉTODOS DE PAGO
-                // Excluimos medios físicos para evitar el error de "Pagar con otro medio".
+                // ✅ SOLUCIÓN AL ERROR "USA UN MEDIO DE PAGO DISTINTO":
+                // Forzamos el uso de tarjetas de prueba excluyendo pagos en efectivo.
                 PaymentMethods = new PreferencePaymentMethodsRequest
                 {
                     ExcludedPaymentTypes = new List<PreferencePaymentTypeRequest>
                     {
-                        new PreferencePaymentTypeRequest { Id = "ticket" }, // Excluye Efecty/Bancos
+                        new PreferencePaymentTypeRequest { Id = "ticket" }, // Excluye Efecty
                         new PreferencePaymentTypeRequest { Id = "atm" }
                     },
-                    Installments = 1 // Forzamos 1 cuota para simplificar el éxito en Sandbox
+                    Installments = 1 
                 }
             };
 
-            // Ejecuta la petición a Mercado Pago
+            // Creamos la preferencia en los servidores de Mercado Pago
             var result = await client.CreateAsync(preference);
 
-            // Importante: Retornamos SandboxInitPoint para el entorno de pruebas.
-            // Esto es vital para no recibir el error de "Operación rechazada".
+            // ✅ RETORNAMOS SandboxInitPoint:
+            // Es obligatorio usar este punto de inicio para que acepten las tarjetas de prueba.
             return result.SandboxInitPoint; 
         }
     }
