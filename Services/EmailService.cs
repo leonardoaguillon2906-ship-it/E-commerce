@@ -4,6 +4,7 @@ using System;
 using System.Net;
 using System.Net.Mail;
 using System.Threading.Tasks;
+using System.Linq; // Agregado para el Where
 using EcommerceApp.Models;
 using EcommerceApp.Data;
 using Microsoft.EntityFrameworkCore;
@@ -31,7 +32,7 @@ namespace EcommerceApp.Services
         }
 
         // =====================================================
-        // MÉTODO REQUERIDO POR ASP.NET IDENTITY
+        // MÉTODO REQUERIDO POR ASP.NET IDENTITY (Confirmación cuenta, etc)
         // =====================================================
         public async Task SendEmailAsync(string email, string subject, string htmlMessage)
         {
@@ -54,7 +55,7 @@ namespace EcommerceApp.Services
             if (string.IsNullOrEmpty(userEmail))
                 return;
 
-            // ✅ CARGA CORRECTA DEL TEMPLATE
+            // ✅ CARGA DEL TEMPLATE
             var template = await _emailTemplateService.LoadAsync("OrderSuccess.html");
 
             // ✅ REEMPLAZO DE VARIABLES
@@ -72,12 +73,20 @@ namespace EcommerceApp.Services
         }
 
         // =====================================================
-        // MÉTODO PRINCIPAL DE ENVÍO SMTP (NO SE TOCA)
+        // MÉTODO PARA EL WEBHOOK (Utilizado por MercadoPagoWebhookController)
         // =====================================================
-        public async Task EnviarCorreoAsync(string to, string subject, string body)
+        public async Task SendAsync(string to, string subject, string body)
+        {
+            await EnviarCorreoAsync(to, subject, body);
+        }
+
+        // =====================================================
+        // MÉTODO PRIVADO PRINCIPAL DE ENVÍO SMTP
+        // =====================================================
+        private async Task EnviarCorreoAsync(string to, string subject, string body)
         {
             if (string.IsNullOrWhiteSpace(to))
-                throw new ArgumentException("El destinatario no puede estar vacío", nameof(to));
+                return;
 
             var smtpHost = _config["EmailSettings:SmtpServer"];
             var smtpPort = _config["EmailSettings:Port"];
@@ -86,43 +95,40 @@ namespace EcommerceApp.Services
             var senderEmail = _config["EmailSettings:SenderEmail"];
             var senderName = _config["EmailSettings:SenderName"];
 
-            if (string.IsNullOrEmpty(smtpHost) ||
-                string.IsNullOrEmpty(smtpPort) ||
-                string.IsNullOrEmpty(username) ||
-                string.IsNullOrEmpty(password) ||
-                string.IsNullOrEmpty(senderEmail))
+            // Validación de configuración
+            if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             {
-                throw new InvalidOperationException(
-                    "La configuración EmailSettings es inválida o incompleta");
+                Console.WriteLine("[Email Error] Configuración SMTP incompleta en variables de entorno.");
+                return;
             }
 
-            using var smtp = new SmtpClient
+            try 
             {
-                Host = smtpHost,
-                Port = int.Parse(smtpPort),
-                EnableSsl = true,
-                Credentials = new NetworkCredential(username, password)
-            };
+                using var smtp = new SmtpClient
+                {
+                    Host = smtpHost,
+                    Port = int.TryParse(smtpPort, out var port) ? port : 587,
+                    EnableSsl = true,
+                    Credentials = new NetworkCredential(username, password)
+                };
 
-            using var mail = new MailMessage
+                using var mail = new MailMessage
+                {
+                    From = new MailAddress(senderEmail, senderName),
+                    Subject = subject,
+                    Body = body,
+                    IsBodyHtml = true
+                };
+
+                mail.To.Add(to);
+
+                await smtp.SendMailAsync(mail);
+            }
+            catch (Exception ex)
             {
-                From = new MailAddress(senderEmail, senderName),
-                Subject = subject,
-                Body = body,
-                IsBodyHtml = true
-            };
-
-            mail.To.Add(to);
-
-            await smtp.SendMailAsync(mail);
-        }
-
-        // =====================================================
-        // MÉTODO FACHADA / USO INTERNO (SE CONSERVA)
-        // =====================================================
-        public async Task SendAsync(string to, string subject, string body)
-        {
-            await EnviarCorreoAsync(to, subject, body);
+                // Evitamos que un fallo de correo tire abajo el Webhook (Error 500)
+                Console.WriteLine($"[Email Exception] {ex.Message}");
+            }
         }
     }
 }

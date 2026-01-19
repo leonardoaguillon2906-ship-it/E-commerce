@@ -13,24 +13,24 @@ using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// =======================
-// VARIABLES DE ENTORNO
-// =======================
+// =====================================================
+// 1. VARIABLES DE ENTORNO
+// =====================================================
 builder.Configuration.AddEnvironmentVariables();
 
-// =======================
-// SERVICIOS BASE
-// =======================
+// =====================================================
+// 2. SERVICIOS BASE Y CONTROLADORES
+// =====================================================
 builder.Services.AddControllersWithViews()
-    .AddJsonOptions(options =>
+    .AddJsonOptions(options => 
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles);
 
-// Habilita el ruteo de atributos para el Webhook ([Route("webhook-mp")])
 builder.Services.AddControllers();
 
+// Configuración para carga de imágenes pesadas
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 10 * 1024 * 1024;
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
 });
 
 builder.Services.AddRazorPages(options =>
@@ -38,27 +38,33 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeAreaFolder("Identity", "/");
 });
 
-// =======================
-// PROTECCIÓN DE DATOS (CRÍTICO PARA RENDER)
-// =======================
-// Esto evita el error "The key was not found in the key ring" al reiniciar el servidor
+// =====================================================
+// 3. PROTECCIÓN DE DATOS (CRÍTICO PARA RENDER)
+// =====================================================
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "DataProtectionKeys")));
 
-// =======================
-// SERVICIOS PERSONALIZADOS
-// =======================
+// =====================================================
+// 4. INYECCIÓN DE DEPENDENCIAS (SERVICIOS)
+// =====================================================
 builder.Services.AddScoped<PasswordService>();
+
+// Registro de Email: Clase concreta e Interfaces
+builder.Services.AddScoped<EmailService>(); 
 builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+
+// ✅ CORRECCIÓN: Registro de la Interfaz del Template Service
 builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
+builder.Services.AddScoped<EmailTemplateService>(); // Clase concreta para Webhook
+
 builder.Services.AddScoped<MercadoPagoService>();
 
-// =======================
-// POSTGRESQL
-// =======================
+// =====================================================
+// 5. CONFIGURACIÓN DE BASE DE DATOS (POSTGRESQL)
+// =====================================================
 var connectionString = builder.Environment.IsDevelopment()
-    ? builder.Configuration.GetConnectionString("DefaultConnection")
+    ? builder.Configuration.GetConnectionString("DefaultConnection") 
     : $"Host={Environment.GetEnvironmentVariable("DATABASE_HOST")};" +
       $"Port={Environment.GetEnvironmentVariable("DATABASE_PORT")};" +
       $"Database={Environment.GetEnvironmentVariable("DATABASE_NAME")};" +
@@ -71,17 +77,16 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString);
 });
 
-// =======================
-// IDENTITY & SESSION
-// =======================
+// =====================================================
+// 6. IDENTITY, SESSION & COOKIES
+// =====================================================
 builder.Services.AddDistributedMemoryCache();
-
 builder.Services.AddSession(options =>
 {
     options.IdleTimeout = TimeSpan.FromMinutes(30);
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Recomendado para Render (HTTPS)
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Recomendado para HTTPS (Render)
 });
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -104,9 +109,9 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.ExpireTimeSpan = TimeSpan.FromDays(7);
 });
 
-// =======================
-// APP BUILD
-// =======================
+// =====================================================
+// 7. CONSTRUCCIÓN Y MIDDLEWARES
+// =====================================================
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
@@ -117,7 +122,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// Configuración de tipos MIME para imágenes modernas
+// Tipos de archivo para imágenes modernas
 var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".avif"] = "image/avif";
 provider.Mappings[".webp"] = "image/webp";
@@ -129,51 +134,56 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.UseRouting();
 
-// El orden de estos middlewares es vital
+// Orden crítico de seguridad
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Redirecciones personalizadas para Identity
+// Redirecciones de rutas Identity
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value?.ToLower();
-    if (path == "/identity/account/login")
-    {
-        context.Response.Redirect("/Account/Login");
-        return;
-    }
-    if (path == "/identity/account/register")
-    {
-        context.Response.Redirect("/Account/Register");
-        return;
-    }
+    if (path == "/identity/account/login") { context.Response.Redirect("/Account/Login"); return; }
+    if (path == "/identity/account/register") { context.Response.Redirect("/Account/Register"); return; }
     await next();
 });
 
-// =======================
-// MIGRACIONES (SOLO DESARROLLO)
-// =======================
-if (app.Environment.IsDevelopment())
+// =====================================================
+// 8. MANTENIMIENTO AUTOMÁTICO DE BASE DE DATOS
+// =====================================================
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
-    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await context.Database.MigrateAsync();
+    var services = scope.ServiceProvider;
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    var logger = services.GetRequiredService<ILogger<Program>>();
+
+    try
+    {
+        logger.LogInformation("Verificando actualizaciones de base de datos...");
+        await context.Database.MigrateAsync();
+
+        await RoleSeeder.SeedRolesAsync(services);
+        await SeedAdminUser.CreateAsync(services);
+        
+        logger.LogInformation("Sistema de base de datos listo.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error durante la inicialización automática.");
+    }
 }
 
-// =======================
-// RUTAS
-// =======================
-
-// ✅ Habilita el controlador de Webhook y otros controladores de API
+// =====================================================
+// 9. RUTAS DE CONTROLADORES Y LANZAMIENTO
+// =====================================================
 app.MapControllers();
 
 app.MapControllerRoute(
-    name: "areas",
+    name: "areas", 
     pattern: "{area:exists}/{controller=Products}/{action=Index}/{id?}");
 
 app.MapControllerRoute(
-    name: "default",
+    name: "default", 
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
 app.MapRazorPages();

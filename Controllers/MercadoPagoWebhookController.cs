@@ -1,9 +1,9 @@
 using EcommerceApp.Data;
+using EcommerceApp.Models;
 using EcommerceApp.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MercadoPago.Resource.Payment;
-using MercadoPago.Resource.MerchantOrder;
 using MercadoPago.Client.Payment;
 using MercadoPago.Client.MerchantOrder;
 using MercadoPago.Config;
@@ -12,7 +12,6 @@ using System.Text.Json;
 namespace EcommerceApp.Controllers
 {
     [ApiController]
-    // ✅ RUTA FINAL: Tu URL en Mercado Pago debe ser: https://tu-app.onrender.com/webhook-mp
     [Route("webhook-mp")] 
     [IgnoreAntiforgeryToken]
     public class MercadoPagoWebhookController : ControllerBase
@@ -30,7 +29,7 @@ namespace EcommerceApp.Controllers
             _emailService = emailService;
             _templateService = templateService;
 
-            // ✅ CONFIGURACIÓN GLOBAL DE TOKEN (Cargado desde variables de entorno de Render)
+            // ✅ Carga el token de acceso desde Render
             var accessToken = Environment.GetEnvironmentVariable("MERCADOPAGO_ACCESS_TOKEN");
             if (!string.IsNullOrEmpty(accessToken))
             {
@@ -43,19 +42,16 @@ namespace EcommerceApp.Controllers
         {
             try 
             {
-                // 1. Capturar el cuerpo de la notificación
-                string body;
-                using (var reader = new StreamReader(Request.Body))
-                {
-                    body = await reader.ReadToEndAsync();
-                }
+                // 1. Leer el cuerpo de la notificación
+                using var reader = new StreamReader(Request.Body);
+                var body = await reader.ReadToEndAsync();
 
                 if (string.IsNullOrWhiteSpace(body)) return Ok();
 
                 using var jsonDoc = JsonDocument.Parse(body);
                 var payload = jsonDoc.RootElement;
 
-                // 2. Identificar tipo de evento
+                // 2. Identificar tipo de evento (Payment o Merchant Order)
                 if (!payload.TryGetProperty("type", out var typeProp)) return Ok();
                 var type = typeProp.GetString();
 
@@ -66,66 +62,71 @@ namespace EcommerceApp.Controllers
                     if (payload.TryGetProperty("data", out var dataProp) &&
                         dataProp.TryGetProperty("id", out var idProp))
                     {
+                        // ✅ Manejo flexible: el ID puede venir como string o número
                         string idStr = idProp.ValueKind == JsonValueKind.Number ? 
                                        idProp.GetInt64().ToString() : idProp.GetString();
 
-                        // ✅ CLAVE: Evitar error 500 con el ID de prueba de Mercado Pago
-                        if (idStr == "123456") return Ok(new { message = "Test exitoso" });
+                        // ✅ SOLUCIÓN AL ERROR 500: Si es el ID de prueba de Mercado Pago, responder 200 inmediatamente
+                        if (idStr == "123456" || string.IsNullOrEmpty(idStr)) 
+                            return Ok(new { message = "Test notification received successfully" });
 
-                        paymentId = long.Parse(idStr);
+                        if (long.TryParse(idStr, out long parsedId)) paymentId = parsedId;
                     }
                 }
-                else if (type == "merchant_order" || type == "topic_merchant_order_wh")
+                else if (type == "merchant_order")
                 {
-                    // Manejo opcional de Merchant Orders para mayor robustez
-                    long merchantOrderId = 0;
+                    // Algunos webhooks envían la orden del comerciante en lugar del pago directo
                     if (payload.TryGetProperty("data", out var d) && d.TryGetProperty("id", out var mid))
-                        merchantOrderId = ReadLong(mid);
-                    else if (payload.TryGetProperty("resource", out var res))
-                        merchantOrderId = ReadLong(res);
-
-                    if (merchantOrderId > 0)
                     {
-                        var moClient = new MerchantOrderClient();
-                        var mo = await moClient.GetAsync(merchantOrderId);
-                        var approved = mo.Payments?.FirstOrDefault(p => p.Status == "approved");
-                        if (approved != null) paymentId = approved.Id ?? 0;
+                        long merchantOrderId = ReadLong(mid);
+                        if (merchantOrderId > 0)
+                        {
+                            var moClient = new MerchantOrderClient();
+                            var mo = await moClient.GetAsync(merchantOrderId);
+                            // Buscamos el último pago aprobado dentro de la orden
+                            var approved = mo.Payments?.FirstOrDefault(p => p.Status == "approved");
+                            if (approved != null) paymentId = approved.Id ?? 0;
+                        }
                     }
                 }
 
-                if (paymentId == 0) return Ok();
-
-                // 3. Consultar API de Mercado Pago y procesar orden
-                var paymentClient = new PaymentClient();
-                var payment = await paymentClient.GetAsync(paymentId);
-                
-                if (payment.Status == "approved" && !string.IsNullOrEmpty(payment.ExternalReference))
+                // 3. Si encontramos un ID de pago válido, procesar la lógica de negocio
+                if (paymentId > 0)
                 {
-                    if (int.TryParse(payment.ExternalReference, out int orderId))
+                    var paymentClient = new PaymentClient();
+                    var payment = await paymentClient.GetAsync(paymentId);
+                    
+                    if (payment.Status == "approved" && !string.IsNullOrEmpty(payment.ExternalReference))
                     {
-                        await ProcesarOrden(orderId);
+                        if (int.TryParse(payment.ExternalReference, out int orderId))
+                        {
+                            await ProcesarActualizacionOrden(orderId);
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
-                // Logueamos pero devolvemos 200 para que MP no reintente fallos de lógica
-                Console.WriteLine($"[Webhook Error] {ex.Message}");
+                // Importante: No devolver Error 500 para evitar bucles de reintentos de Mercado Pago
+                Console.WriteLine($"[Webhook Critical Error] {DateTime.UtcNow}: {ex.Message}");
             }
 
             return Ok(); 
         }
 
-        private async Task ProcesarOrden(int orderId)
+        private async Task ProcesarActualizacionOrden(int orderId)
         {
+            // Usamos un contexto limpio para evitar problemas de rastreo
             var order = await _context.Orders
                 .Include(o => o.User)
-                .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.Product)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
+            // Solo procesamos si la orden existe y aún no está marcada como pagada
             if (order != null && order.Status != "Pagado")
             {
-                // Descontar Stock
+                // ✅ 1. Actualizar Stock de productos
                 foreach (var item in order.OrderItems)
                 {
                     if (item.Product != null)
@@ -134,23 +135,28 @@ namespace EcommerceApp.Controllers
                     }
                 }
 
+                // ✅ 2. Cambiar estado de la orden
                 order.Status = "Pagado";
                 await _context.SaveChangesAsync();
                 
-                // Enviar confirmación por Email
+                // ✅ 3. Enviar correo electrónico (dentro de try-catch para no afectar la DB)
                 try 
                 {
                     var bodyHtml = await _templateService.BuildOrderConfirmationEmail(order);
-                    await _emailService.SendAsync(order.User.Email, $"¡Pago Confirmado! Pedido #{order.Id}", bodyHtml);
+                    await _emailService.SendAsync(order.User.Email, $"Confirmación de Pago - Pedido #{order.Id}", bodyHtml);
                 }
-                catch (Exception ex) 
+                catch (Exception emailEx) 
                 {
-                    Console.WriteLine($"[Email Error] No se pudo enviar el correo: {ex.Message}");
+                    Console.WriteLine($"[Email Notification Error] Orden #{orderId}: {emailEx.Message}");
                 }
             }
         }
 
-        private long ReadLong(JsonElement el) => 
-            el.ValueKind == JsonValueKind.Number ? el.GetInt64() : long.Parse(el.GetString() ?? "0");
+        private long ReadLong(JsonElement el)
+        {
+            if (el.ValueKind == JsonValueKind.Number) return el.GetInt64();
+            if (el.ValueKind == JsonValueKind.String && long.TryParse(el.GetString(), out long val)) return val;
+            return 0;
+        }
     }
 }
