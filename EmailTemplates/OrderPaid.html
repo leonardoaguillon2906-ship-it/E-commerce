@@ -5,43 +5,105 @@
     <title>Confirmación de pago</title>
     <style>
         body {
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: 'Segoe UI', Arial, sans-serif;
             background-color: #f4f6f8;
+            margin: 0;
             padding: 20px;
         }
         .container {
             max-width: 600px;
             background: #ffffff;
             margin: auto;
-            padding: 20px;
-            border-radius: 6px;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         }
-        h2 { color: #2c3e50; }
-        .total { font-size: 18px; font-weight: bold; }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+        h2 { color: #2c3e50; margin: 0; }
+        .order-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th {
+            text-align: left;
+            border-bottom: 2px solid #eee;
+            padding: 10px;
+            color: #7f8c8d;
+        }
+        .total-container {
+            text-align: right;
+            padding: 20px 10px;
+            border-top: 2px solid #eee;
+        }
+        .total { 
+            font-size: 20px; 
+            font-weight: bold; 
+            color: #2c3e50;
+        }
         .footer {
             margin-top: 30px;
             font-size: 12px;
-            color: #7f8c8d;
+            color: #95a5a6;
             text-align: center;
+        }
+        .status-badge {
+            display: inline-block;
+            background-color: #27ae60;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2>Gracias por tu compra</h2>
+    <div class="header">
+        <h2>¡Gracias por tu compra!</h2>
+        <div class="status-badge">Pago Aprobado</div>
+    </div>
 
     <p>Hola <strong>{{CustomerName}}</strong>,</p>
+    <p>Nos complace informarte que tu pago ha sido procesado con éxito.</p>
 
-    <p>Tu orden <strong>#{{OrderId}}</strong> fue pagada correctamente.</p>
+    <div class="order-info">
+        <strong>Orden:</strong> #{{OrderId}}<br>
+        <strong>Fecha:</strong> {{Date}}
+    </div>
 
-    <ul>
-        {{OrderItems}}
-    </ul>
+    <table>
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th style="text-align: center;">Cant.</th>
+                <th style="text-align: right;">Precio</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{OrderItems}}
+        </tbody>
+    </table>
 
-    <p class="total">Total pagado: ${{Total}}</p>
+    <div class="total-container">
+        <span class="total">Total pagado: ${{Total}} COP</span>
+    </div>
 
     <div class="footer">
-        © {{Year}} Ecommerce App
+        Este es un correo automático, por favor no respondas a este mensaje.<br>
+        © {{Year}} Ecommerce App - Todos los derechos reservados.
     </div>
 </div>
 </body>
