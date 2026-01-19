@@ -16,18 +16,16 @@ namespace EcommerceApp.Services.Payments
         {
             _configuration = configuration;
 
-            // Intenta obtener el token de la variable de entorno directa o de la jerarquía del JSON
-            string token = Environment.GetEnvironmentVariable("MERCADOPAGO_ACCESS_TOKEN") 
-                           ?? _configuration["PaymentProviders:MercadoPago:AccessToken"];
-
-            MercadoPagoConfig.AccessToken = token;
+            // Prioriza la variable de entorno de Render, si no existe, usa appsettings.json
+            MercadoPagoConfig.AccessToken = Environment.GetEnvironmentVariable("MERCADOPAGO_ACCESS_TOKEN") 
+                ?? _configuration["PaymentProviders:MercadoPago:AccessToken"];
         }
 
         public async Task<string> CrearPago(decimal total, int orderId)
         {
             var client = new PreferenceClient();
 
-            // Detecta URL de Render o usa la de Ngrok para pruebas locales
+            // ✅ DETECCIÓN AUTOMÁTICA DE URL BASE
             string baseUrl = Environment.GetEnvironmentVariable("RENDER_EXTERNAL_URL") 
                 ?? "https://spectrohelioscopic-porpoiselike-wilber.ngrok-free.dev"; 
 
@@ -45,23 +43,34 @@ namespace EcommerceApp.Services.Payments
             var preference = new PreferenceRequest
             {
                 Items = items,
+
+                // ✅ AGREGAR PAGADOR DE PRUEBA
+                // Esto evita que el sistema sospeche de fraude al intentar usar tu propia cuenta de desarrollador
                 Payer = new PreferencePayerRequest
                 {
-                    Email = "test_user_123456@testuser.com" // Email ficticio para Sandbox
+                    Email = "test_user_123456@testuser.com" 
                 },
+
+                // ✅ WEBHOOK DINÁMICO
                 NotificationUrl = $"{baseUrl}/Cliente/Checkout/Webhook",
+
+                // ✅ BACKURLS DINÁMICAS
                 BackUrls = new PreferenceBackUrlsRequest
                 {
                     Success = $"{baseUrl}/Cliente/Checkout/Success",
                     Failure = $"{baseUrl}/Cliente/Checkout/Failure",
                     Pending = $"{baseUrl}/Cliente/Checkout/Pending"
                 },
+
+                // ✅ CONFIGURACIONES CRÍTICAS PARA SANDBOX
                 AutoReturn = "approved",
-                BinaryMode = true, // Evita estados pendientes
+                BinaryMode = true, // Fuerza a que el resultado sea solo 'approved' o 'rejected'
                 ExternalReference = orderId.ToString()
             };
 
             var result = await client.CreateAsync(preference);
+
+            // Importante: SandboxInitPoint es exclusivo para pruebas con credenciales de prueba
             return result.SandboxInitPoint; 
         }
     }
