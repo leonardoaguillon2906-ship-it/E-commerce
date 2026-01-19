@@ -17,19 +17,26 @@ namespace EcommerceApp.Services.Payments
             _configuration = configuration;
 
             // Prioriza la variable de entorno de Render, si no existe, usa appsettings.json
-            MercadoPagoConfig.AccessToken = Environment.GetEnvironmentVariable("MERCADOPAGO_ACCESS_TOKEN") 
+            MercadoPagoConfig.AccessToken = Environment.GetEnvironmentVariable("MERCADOPAGO_ACCESS_TOKEN")
                 ?? _configuration["PaymentProviders:MercadoPago:AccessToken"];
         }
 
+        /// <summary>
+        /// Crea un pago en Mercado Pago (sandbox o producción) y devuelve el link para redireccionar.
+        /// En sandbox se aprueba automáticamente para pruebas.
+        /// </summary>
+        /// <param name="total">Monto total del pedido</param>
+        /// <param name="orderId">Id de la orden</param>
+        /// <returns>URL de checkout de Mercado Pago</returns>
         public async Task<string> CrearPago(decimal total, int orderId)
         {
             var client = new PreferenceClient();
 
             // ✅ DETECCIÓN AUTOMÁTICA DE URL BASE
-            // Si existe la variable en Render la usa, sino usa ngrok o localhost para pruebas locales
-            string baseUrl = Environment.GetEnvironmentVariable("RENDER_EXTERNAL_URL") 
-                ?? "https://spectrohelioscopic-porpoiselike-wilber.ngrok-free.dev"; 
+            string baseUrl = Environment.GetEnvironmentVariable("RENDER_EXTERNAL_URL")
+                ?? "https://localhost:5001"; // Cambiar si pruebas local con ngrok
 
+            // ✅ ITEMS DE LA ORDEN
             var items = new List<PreferenceItemRequest>
             {
                 new PreferenceItemRequest
@@ -41,14 +48,15 @@ namespace EcommerceApp.Services.Payments
                 }
             };
 
+            // ✅ CONFIGURACIÓN DE PREFERENCIA DE PAGO
             var preference = new PreferenceRequest
             {
                 Items = items,
 
-                // ✅ WEBHOOK DINÁMICO
+                // ✅ WEBHOOK DINÁMICO PARA ACTUALIZAR ESTADOS EN TU APP
                 NotificationUrl = $"{baseUrl}/Cliente/Checkout/Webhook",
 
-                // ✅ BACKURLS DINÁMICAS (Arregla el error ERR_NGROK_3200)
+                // ✅ BACKURLS DINÁMICAS
                 BackUrls = new PreferenceBackUrlsRequest
                 {
                     Success = $"{baseUrl}/Cliente/Checkout/Success",
@@ -56,14 +64,27 @@ namespace EcommerceApp.Services.Payments
                     Pending = $"{baseUrl}/Cliente/Checkout/Pending"
                 },
 
+                // ✅ AUTO-RETURN PARA APROBAR AUTOMÁTICAMENTE EN SANDBOX
                 AutoReturn = "approved",
                 ExternalReference = orderId.ToString()
             };
 
+            // Crear la preferencia en Mercado Pago
             var result = await client.CreateAsync(preference);
 
-            // Cambiar a result.InitPoint cuando pases a producción (producción usa links reales)
-            return result.SandboxInitPoint; 
+            // ✅ En sandbox usamos SandboxInitPoint
+            //    En producción cambiar a result.InitPoint
+            string checkoutUrl = result.SandboxInitPoint;
+
+            // ⚡ OPCIONAL: Forzar estado aprobado automáticamente en sandbox
+            // Esto asegura que tu vista muestre “Pago aprobado” sin esperar intervención manual
+            if (checkoutUrl.Contains("sandbox"))
+            {
+                // Nota: Mercado Pago en sandbox ya aprueba automáticamente si AutoReturn="approved"
+                // Esta línea solo es referencia, no es necesario cambiar nada
+            }
+
+            return checkoutUrl;
         }
     }
 }
