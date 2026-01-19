@@ -9,6 +9,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Http.Features;
 using System.Security.Claims;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +25,7 @@ builder.Services.AddControllersWithViews()
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles);
 
+// Habilita el ruteo de atributos para el Webhook ([Route("webhook-mp")])
 builder.Services.AddControllers();
 
 builder.Services.Configure<FormOptions>(options =>
@@ -37,15 +39,19 @@ builder.Services.AddRazorPages(options =>
 });
 
 // =======================
+// PROTECCIÓN DE DATOS (CRÍTICO PARA RENDER)
+// =======================
+// Esto evita el error "The key was not found in the key ring" al reiniciar el servidor
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "DataProtectionKeys")));
+
+// =======================
 // SERVICIOS PERSONALIZADOS
 // =======================
 builder.Services.AddScoped<PasswordService>();
-
 builder.Services.AddScoped<IEmailSender, EmailService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
-
-// Servicio de Mercado Pago
 builder.Services.AddScoped<MercadoPagoService>();
 
 // =======================
@@ -75,6 +81,7 @@ builder.Services.AddSession(options =>
     options.IdleTimeout = TimeSpan.FromMinutes(30);
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Recomendado para Render (HTTPS)
 });
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -82,8 +89,6 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.SignIn.RequireConfirmedAccount = false;
     options.Password.RequiredLength = 6;
     
-    // ✅ ASEGURAR QUE EL EMAIL ESTÉ EN LOS CLAIMS
-    // Esto es vital para que CheckoutController pueda obtener User.FindFirstValue(ClaimTypes.Email)
     options.ClaimsIdentity.UserIdClaimType = ClaimTypes.NameIdentifier;
     options.ClaimsIdentity.UserNameClaimType = ClaimTypes.Name;
     options.ClaimsIdentity.RoleClaimType = ClaimTypes.Role;
@@ -95,10 +100,12 @@ builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
+    options.Cookie.Name = "EcommerceApp.Identity";
+    options.ExpireTimeSpan = TimeSpan.FromDays(7);
 });
 
 // =======================
-// APP
+// APP BUILD
 // =======================
 var app = builder.Build();
 
@@ -110,6 +117,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Configuración de tipos MIME para imágenes modernas
 var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".avif"] = "image/avif";
 provider.Mappings[".webp"] = "image/webp";
@@ -120,10 +128,13 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseRouting();
+
+// El orden de estos middlewares es vital
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Redirecciones personalizadas para Identity
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value?.ToLower();
@@ -141,7 +152,7 @@ app.Use(async (context, next) =>
 });
 
 // =======================
-// MIGRATIONS SOLO DEV
+// MIGRACIONES (SOLO DESARROLLO)
 // =======================
 if (app.Environment.IsDevelopment())
 {
@@ -153,6 +164,8 @@ if (app.Environment.IsDevelopment())
 // =======================
 // RUTAS
 // =======================
+
+// ✅ Habilita el controlador de Webhook y otros controladores de API
 app.MapControllers();
 
 app.MapControllerRoute(
