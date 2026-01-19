@@ -14,6 +14,8 @@ namespace EcommerceApp.Controllers
     [ApiController]
     // ✅ CAMBIO CLAVE: Ruta ultra simple para evitar el 404
     [Route("webhook-mp")] 
+
+    [IgnoreAntiforgeryToken]
     public class MercadoPagoWebhookController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
