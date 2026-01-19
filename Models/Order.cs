@@ -43,5 +43,41 @@ namespace EcommerceApp.Models
         // ITEMS DE LA ORDEN (RELACIÓN REAL)
         // ===============================
         public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
+
+        // ===============================
+        // Mensaje dinámico para la vista según el estado del pago
+        // ===============================
+        [NotMapped]
+        public string DisplayMessage
+        {
+            get
+            {
+                return Status switch
+                {
+                    "Procesando" => "¡Pago aprobado! Tu pedido está en proceso.",
+                    "Pendiente" => "¡Ya casi es tuyo! Estamos revisando tu pago. Dentro de las próximas 24 horas te avisaremos por e-mail si se acreditó.",
+                    "Rechazado" => "Tu pago fue rechazado. Por favor intenta nuevamente.",
+                    _ => "Estado del pago desconocido. Contacta soporte si el problema persiste."
+                };
+            }
+        }
+
+        // ===============================
+        // Color dinámico para la vista según el estado
+        // ===============================
+        [NotMapped]
+        public string DisplayColor
+        {
+            get
+            {
+                return Status switch
+                {
+                    "Procesando" => "text-success",
+                    "Pendiente" => "text-warning",
+                    "Rechazado" => "text-danger",
+                    _ => "text-muted"
+                };
+            }
+        }
     }
 }
