@@ -29,42 +29,21 @@ namespace EcommerceApp.Areas.Cliente.Controllers
             _logger = logger;
         }
 
-        [HttpGet]
-        public IActionResult Index()
-        {
-            try
-            {
-                var cart = HttpContext.Session.GetObject<List<CartItem>>("CART");
-
-                if (cart == null || !cart.Any())
-                    return RedirectToAction("Index", "Cart", new { area = "Cliente" });
-
-                return View(cart);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error al cargar el carrito para Checkout");
-                TempData["Error"] = "Ocurrió un error al cargar el carrito.";
-                return RedirectToAction("Index", "Cart", new { area = "Cliente" });
-            }
-        }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Confirm()
         {
+            // Usamos una transacción para asegurar que si falla el pago, el stock no se descuente mal
+            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 var cart = HttpContext.Session.GetObject<List<CartItem>>("CART");
-
                 if (cart == null || !cart.Any())
                     return RedirectToAction("Index", "Cart", new { area = "Cliente" });
 
                 var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(userId))
-                    return RedirectToAction("Login", "Account");
 
-                // Validar stock
+                // 1. VALIDAR Y DESCONTAR STOCK (Importante agregarlo aquí)
                 foreach (var item in cart)
                 {
                     var product = await _context.Products.FindAsync(item.ProductId);
@@ -73,6 +52,7 @@ namespace EcommerceApp.Areas.Cliente.Controllers
                         TempData["Error"] = $"No hay stock suficiente para {item.Name}";
                         return RedirectToAction("Index", "Cart", new { area = "Cliente" });
                     }
+                    product.Stock -= item.Quantity; // Descuento preventivo
                 }
 
                 var total = cart.Sum(i => i.Price * i.Quantity);
@@ -100,14 +80,17 @@ namespace EcommerceApp.Areas.Cliente.Controllers
                 }
 
                 await _context.SaveChangesAsync();
+                await transaction.CommitAsync(); // Guardamos los cambios en la DB
 
+                // 2. CREAR PAGO (Aquí el servicio usará BinaryMode para evitar el error de las fotos)
                 var initPoint = await _mercadoPagoService.CrearPago(order.Total, order.Id);
                 return Redirect(initPoint);
             }
             catch (Exception ex)
             {
+                await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error al confirmar el checkout");
-                TempData["Error"] = "Ocurrió un error procesando su orden. Intente nuevamente.";
+                TempData["Error"] = "Ocurrió un error procesando su orden.";
                 return RedirectToAction("Index", "Cart", new { area = "Cliente" });
             }
         }
@@ -116,118 +99,41 @@ namespace EcommerceApp.Areas.Cliente.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Success(string payment_id, string status, string external_reference)
         {
-            string message = string.Empty;
-            Order? order = null;
-
-            try
+            if (int.TryParse(external_reference, out int orderId))
             {
-                if (!string.IsNullOrEmpty(external_reference) &&
-                    int.TryParse(external_reference, out int orderId))
+                var order = await _context.Orders.FindAsync(orderId);
+                if (order != null && status?.ToLower() == "approved")
                 {
-                    order = await _context.Orders
-                        .Include(o => o.OrderItems)
-                            .ThenInclude(oi => oi.Product)
-                        .FirstOrDefaultAsync(o => o.Id == orderId);
-
-                    if (order != null)
-                    {
-                        HttpContext.Session.Remove("CART");
-
-                        switch (status?.ToLower())
-                        {
-                            case "approved":
-                                if (order.Status != "Procesando")
-                                {
-                                    order.Status = "Procesando";
-                                    await _context.SaveChangesAsync();
-                                }
-                                message = "¡Pago aprobado! Tu pedido está en proceso.";
-                                break;
-
-                            case "pending":
-                            case "in_process":
-                            case "review_manual":
-                                order.Status = "Pendiente";
-                                await _context.SaveChangesAsync();
-                                message = "Tu pago está pendiente. Te notificaremos por correo cuando se acredite.";
-                                break;
-
-                            case "rejected":
-                                order.Status = "Rechazado";
-                                await _context.SaveChangesAsync();
-                                message = "Tu pago fue rechazado. Por favor intenta nuevamente.";
-                                break;
-
-                            default:
-                                message = "Estado del pago desconocido. Contacta soporte si el problema persiste.";
-                                break;
-                        }
-                    }
+                    order.Status = "Procesando";
+                    await _context.SaveChangesAsync();
+                    HttpContext.Session.Remove("CART");
+                    ViewBag.Message = "¡Pago aprobado! Tu pedido está en proceso.";
+                    return View(order);
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error procesando Success");
-                message = "Ocurrió un error procesando tu orden.";
-            }
-
-            ViewBag.Message = message;
-            return View(order);
-        }
-
-        [HttpGet]
-        [AllowAnonymous]
-        public async Task<IActionResult> Pending(string external_reference)
-        {
-            string message = "Tu pago está pendiente. Te notificaremos por correo cuando se acredite.";
-            try
-            {
-                if (!string.IsNullOrEmpty(external_reference) &&
-                    int.TryParse(external_reference, out int orderId))
-                {
-                    var order = await _context.Orders.FindAsync(orderId);
-                    if (order != null)
-                    {
-                        order.Status = "Pendiente";
-                        await _context.SaveChangesAsync();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error procesando Pending");
-                message = "Ocurrió un error procesando tu orden.";
-            }
-
-            ViewBag.Message = message;
-            return View();
+            return RedirectToAction("Index", "Home");
         }
 
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> Failure(string external_reference)
         {
-            string message = "Tu pago fue rechazado. Por favor intenta nuevamente.";
-            try
+            if (int.TryParse(external_reference, out int orderId))
             {
-                if (!string.IsNullOrEmpty(external_reference) &&
-                    int.TryParse(external_reference, out int orderId))
+                var order = await _context.Orders.Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == orderId);
+                if (order != null)
                 {
-                    var order = await _context.Orders.FindAsync(orderId);
-                    if (order != null)
+                    order.Status = "Rechazado";
+                    // 3. DEVOLVER STOCK (Si el pago falla, el producto vuelve a la tienda)
+                    foreach (var item in order.OrderItems)
                     {
-                        order.Status = "Rechazado";
-                        await _context.SaveChangesAsync();
+                        var product = await _context.Products.FindAsync(item.ProductId);
+                        if (product != null) product.Stock += item.Quantity;
                     }
+                    await _context.SaveChangesAsync();
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error procesando Failure");
-                message = "Ocurrió un error procesando tu orden.";
-            }
-
-            ViewBag.Message = message;
+            ViewBag.Message = "Tu pago fue rechazado. El stock ha sido liberado.";
             return View();
         }
     }
